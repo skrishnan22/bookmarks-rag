@@ -6,15 +6,26 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 ENVIRONMENT = "development"
 
+# Queue bindings
+[[queues.producers]]
+queue = "bookmark-ingestion"
+binding = "INGESTION_QUEUE"
+
+[[queues.consumers]]
+queue = "bookmark-ingestion"
+max_batch_size = 1        # Process one bookmark at a time (long-running task)
+max_batch_timeout = 5     # Wait up to 5 seconds to batch
+
 # Secrets (set via wrangler secret put):
 # - DATABASE_URL
+# - MARKDOWNER_URL
 # - OPENROUTER_API_KEY
 # - COHERE_API_KEY
 # - GOOGLE_CLIENT_ID
 # - GOOGLE_CLIENT_SECRET
 # - JWT_SECRET
 
-# Service binding to Markdowner worker (internal)
+# Service binding to Markdowner worker (production)
 # [[services]]
 # binding = "MARKDOWNER"
 # service = "rag-bookmarks-markdowner"
