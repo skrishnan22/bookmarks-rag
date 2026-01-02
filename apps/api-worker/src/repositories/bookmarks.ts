@@ -2,13 +2,11 @@ import { eq, and, desc } from "drizzle-orm";
 import type { Database } from "../db/index.js";
 import { bookmarks, type Bookmark, type BookmarkStatus } from "../db/schema.js";
 
-// Params for creating a bookmark
 export interface CreateBookmarkParams {
   userId: string;
   url: string;
 }
 
-// Params for updating a bookmark - all fields optional except id
 export interface UpdateBookmarkParams {
   id: string;
   title?: string;
@@ -36,10 +34,6 @@ export class BookmarkRepository {
     return result[0];
   }
 
-  /**
-   * Find a bookmark by ID
-   * Returns null if not found (expected case, not an error)
-   */
   async findById(id: string): Promise<Bookmark | null> {
     const result = await this.db
       .select()
@@ -63,11 +57,6 @@ export class BookmarkRepository {
     return result[0] ?? null;
   }
 
-  /**
-   * Update a bookmark's fields
-   * Only updates fields that are explicitly provided (not undefined)
-   * Drizzle automatically ignores undefined values in .set()
-   */
   async update(params: UpdateBookmarkParams): Promise<Bookmark | null> {
     const { id, ...fields } = params;
 
@@ -83,9 +72,6 @@ export class BookmarkRepository {
     return result[0] ?? null;
   }
 
-  /**
-   * List bookmarks for a user with pagination
-   */
   async listByUser(
     userId: string,
     limit: number = 20,
@@ -101,5 +87,4 @@ export class BookmarkRepository {
   }
 }
 
-// Re-export types for convenience
 export type { Bookmark, BookmarkStatus };

@@ -36,7 +36,6 @@ bookmarksRouter.post(
     const userId = TEST_USER_ID;
 
     try {
-      // Check if bookmark already exists for this user
       const existing = await bookmarkRepo.findByUserAndUrl(userId, url);
       if (existing) {
         return c.json(
@@ -52,10 +51,8 @@ bookmarksRouter.post(
         );
       }
 
-      // Create bookmark with pending status
       const bookmark = await bookmarkRepo.create({ userId, url });
 
-      // Queue the bookmark for processing
       const message: BookmarkIngestionMessage = {
         bookmarkId: bookmark.id,
         url: bookmark.url,
@@ -65,7 +62,6 @@ bookmarksRouter.post(
 
       console.log(`Bookmark ${bookmark.id} created and queued for processing`);
 
-      // Return 202 Accepted (processing will happen async)
       return c.json(
         {
           success: true,
