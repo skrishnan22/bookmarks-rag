@@ -7,6 +7,7 @@
 - Code should be modular, testable, and well-structured
 - Follow design patterns where applicable (Repository pattern for DB, Service layer for business logic, etc.)
 - Avoid premature abstraction - start simple, refactor when patterns emerge
+- Do not overuse comments. add comments to explain why or how a function works. dont add line level comments unless absolutely necessary. Do not add format or section comments
 
 ## TypeScript Guidelines
 
