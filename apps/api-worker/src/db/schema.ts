@@ -5,6 +5,8 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  integer,
+  vector,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
@@ -60,8 +62,33 @@ export const bookmarks = pgTable(
   ]
 );
 
-export type User = typeof users.$inferSelect; //TODO=> What is this?
+export const chunks = pgTable(
+  "chunks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    bookmarkId: uuid("bookmark_id")
+      .notNull()
+      .references(() => bookmarks.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    context: text("context"),
+    contextualizedContent: text("contextualized_content"),
+    breadcrumbPath: text("breadcrumb_path"),
+    position: integer("position").notNull(),
+    tokenCount: integer("token_count"),
+    embedding: vector("embedding", { dimensions: 1536 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("chunks_bookmark_id_idx").on(table.bookmarkId),
+    index("chunks_position_idx").on(table.bookmarkId, table.position),
+  ]
+);
+
+export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
 export type Bookmark = typeof bookmarks.$inferSelect;
 export type NewBookmark = typeof bookmarks.$inferInsert;
+
+export type Chunk = typeof chunks.$inferSelect;
+export type NewChunk = typeof chunks.$inferInsert;
