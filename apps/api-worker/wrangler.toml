@@ -18,14 +18,8 @@ max_batch_timeout = 5     # Wait up to 5 seconds to batch
 
 # Secrets (set via wrangler secret put):
 # - DATABASE_URL
-# - MARKDOWNER_URL
-# - OPENROUTER_API_KEY
-# - COHERE_API_KEY
+# - OPENROUTER_API_KEY  (LLM for summaries)
+# - JINA_API_KEY        (embeddings + reranking)
 # - GOOGLE_CLIENT_ID
 # - GOOGLE_CLIENT_SECRET
 # - JWT_SECRET
-
-# Service binding to Markdowner worker (production)
-# [[services]]
-# binding = "MARKDOWNER"
-# service = "rag-bookmarks-markdowner"

@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import type { Database } from "../db/index.js";
 import { bookmarks, type Bookmark, type BookmarkStatus } from "../db/schema.js";
 
@@ -10,6 +10,7 @@ export interface CreateBookmarkParams {
 export interface UpdateBookmarkParams {
   id: string;
   title?: string;
+  summary?: string;
   markdown?: string;
   status?: BookmarkStatus;
   errorMessage?: string;
@@ -84,6 +85,19 @@ export class BookmarkRepository {
       .orderBy(desc(bookmarks.createdAt))
       .limit(limit)
       .offset(offset);
+  }
+
+  async findByIds(ids: string[]): Promise<Map<string, Bookmark>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const results = await this.db
+      .select()
+      .from(bookmarks)
+      .where(inArray(bookmarks.id, ids));
+
+    return new Map(results.map((b) => [b.id, b]));
   }
 }
 

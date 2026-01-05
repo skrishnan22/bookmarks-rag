@@ -75,7 +75,7 @@ export const chunks = pgTable(
     breadcrumbPath: text("breadcrumb_path"),
     position: integer("position").notNull(),
     tokenCount: integer("token_count"),
-    embedding: vector("embedding", { dimensions: 1536 }),
+    embedding: vector("embedding", { dimensions: 1024 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (table) => [
