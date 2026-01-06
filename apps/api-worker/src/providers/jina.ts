@@ -40,13 +40,21 @@ interface JinaErrorResponse {
   detail: string;
 }
 
+export type JinaEmbeddingTask = "retrieval.query" | "retrieval.passage";
+
 export class JinaEmbeddingProvider implements EmbeddingProvider {
   private apiKey: string;
   private model: string;
+  private task: JinaEmbeddingTask | undefined;
 
-  constructor(apiKey: string, model: string = DEFAULT_EMBEDDING_MODEL) {
+  constructor(
+    apiKey: string,
+    model: string = DEFAULT_EMBEDDING_MODEL,
+    task?: JinaEmbeddingTask
+  ) {
     this.apiKey = apiKey;
     this.model = model;
+    this.task = task;
   }
 
   async embed(text: string): Promise<number[]> {
@@ -63,16 +71,23 @@ export class JinaEmbeddingProvider implements EmbeddingProvider {
       return [];
     }
 
+    const body: Record<string, unknown> = {
+      model: this.model,
+      input: texts,
+    };
+
+    if (this.task) {
+      body.task = this.task;
+      body.normalized = true;
+    }
+
     const response = await fetch(`${JINA_API_BASE}/embeddings`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: this.model,
-        input: texts,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -84,7 +99,6 @@ export class JinaEmbeddingProvider implements EmbeddingProvider {
 
     const data = (await response.json()) as JinaEmbeddingResponse;
 
-    // Sort by index to maintain input order
     const sorted = data.data.sort((a, b) => a.index - b.index);
     return sorted.map((item) => item.embedding);
   }
