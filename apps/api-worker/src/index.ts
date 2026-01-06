@@ -1,11 +1,22 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import pLimit from "p-limit";
 
 import type { Env, BookmarkIngestionMessage } from "./types.js";
 import { bookmarksRouter } from "./routes/bookmarks.js";
+import { searchRouter } from "./routes/search.js";
 import { createDb } from "./db/index.js";
 import { BookmarkRepository } from "./repositories/bookmarks.js";
+import { ChunkRepository } from "./repositories/chunks.js";
+import { chunkMarkdown } from "./services/chunking.js";
+import {
+  createEmbeddingProvider,
+  createLLMProvider,
+} from "./providers/index.js";
+import { generateEmbeddings } from "./services/embedding.js";
+import { fetchAndConvertToMarkdown } from "./services/html-to-markdown.js";
+import { generateSummary } from "./services/summary.js";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -42,6 +53,7 @@ app.get("/api/v1", (c) => {
 
 // Mount routes
 app.route("/api/v1/bookmarks", bookmarksRouter);
+app.route("/api/v1/search", searchRouter);
 
 // 404 handler
 app.notFound((c) => {
@@ -82,37 +94,95 @@ async function handleQueueMessage(
 
   const db = createDb(env.DATABASE_URL);
   const bookmarkRepo = new BookmarkRepository(db);
+  const chunkRepo = new ChunkRepository(db);
 
   try {
     // Update status to processing
     await bookmarkRepo.update({ id: bookmarkId, status: "PROCESSING" });
 
-    // Call Markdowner to convert URL to markdown
-    const markdownerUrl = env.MARKDOWNER_URL || "http://localhost:8787";
-    const response = await fetch(markdownerUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
+    // Step 1: Fetch URL and convert to markdown
+    const { title, markdown } = await fetchAndConvertToMarkdown(url);
+    console.log(
+      `Bookmark ${bookmarkId}: Extracted title "${title}", markdown length: ${markdown.length}`
+    );
 
-    if (!response.ok) {
-      throw new Error(
-        `Markdowner failed: ${response.status} ${response.statusText}`
-      );
-    }
+    // Step 2: Generate summary
+    const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
+    const summary = await generateSummary(markdown, title, llmProvider);
+    console.log(
+      `Bookmark ${bookmarkId}: Generated summary (${summary.length} chars)`
+    );
 
-    const result = (await response.json()) as {
-      content?: string;
-      title?: string;
-    };
-    const markdown = result.content || "";
-    const title = result.title || url;
-
-    // Update bookmark with extracted content
+    // Step 3: Update bookmark with extracted content and summary
     await bookmarkRepo.update({
       id: bookmarkId,
       title,
       markdown,
+      summary,
+    });
+
+    // Step 4: Chunk the markdown
+    const textChunks = chunkMarkdown(markdown);
+    const chunksWithBreadcrumbs = textChunks.filter(
+      (c) => c.breadcrumbPath
+    ).length;
+    console.log(
+      `Bookmark ${bookmarkId}: Created ${textChunks.length} chunks (${chunksWithBreadcrumbs} with breadcrumbs)`
+    );
+
+    // Step 5: Delete existing chunks (in case of re-processing)
+    await chunkRepo.deleteByBookmarkId(bookmarkId);
+
+    // Step 6: Store chunks in database
+    if (textChunks.length > 0) {
+      const chunkParams = textChunks.map((chunk) => ({
+        bookmarkId,
+        content: chunk.content,
+        position: chunk.position,
+        tokenCount: chunk.tokenCount,
+        breadcrumbPath: chunk.breadcrumbPath,
+      }));
+
+      const storedChunks = await chunkRepo.createMany(chunkParams);
+      console.log(
+        `Bookmark ${bookmarkId}: Stored ${storedChunks.length} chunks`
+      );
+
+      const embeddingProvider = createEmbeddingProvider(
+        "jina",
+        env.JINA_API_KEY
+      );
+
+      const chunkContents = storedChunks.map((chunk) => chunk.content);
+      console.log(
+        `Bookmark ${bookmarkId}: Generating embeddings for ${chunkContents.length} chunks`
+      );
+
+      const embeddings = await generateEmbeddings(
+        chunkContents,
+        embeddingProvider
+      );
+
+      // Step 8: Update chunks with embeddings
+      for (let i = 0; i < storedChunks.length; i++) {
+        const chunk = storedChunks[i];
+        const embedding = embeddings[i];
+        if (chunk && embedding) {
+          await chunkRepo.update({
+            id: chunk.id,
+            embedding,
+          });
+        }
+      }
+
+      console.log(
+        `Bookmark ${bookmarkId}: Stored embeddings for ${embeddings.length} chunks`
+      );
+    }
+
+    // Mark as done
+    await bookmarkRepo.update({
+      id: bookmarkId,
       status: "DONE",
     });
 
@@ -121,6 +191,19 @@ async function handleQueueMessage(
     console.error(`Failed to process bookmark ${bookmarkId}:`, error);
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+
+    await bookmarkRepo.update({
+      id: bookmarkId,
+      status: "FAILED",
+      errorMessage,
+    });
+
+    await bookmarkRepo.update({
+      id: bookmarkId,
+      status: "FAILED",
+      errorMessage,
+    });
+
     await bookmarkRepo.update({
       id: bookmarkId,
       status: "FAILED",
@@ -141,14 +224,20 @@ export default {
   ): Promise<void> {
     console.log(`Processing batch of ${batch.messages.length} messages`);
 
-    for (const message of batch.messages) {
-      try {
-        await handleQueueMessage(message.body, env);
-        message.ack();
-      } catch (error) {
-        console.error("Failed to process message:", error);
-        message.retry();
-      }
-    }
+    const limit = pLimit(5);
+
+    await Promise.all(
+      batch.messages.map((message) =>
+        limit(async () => {
+          try {
+            await handleQueueMessage(message.body, env);
+            message.ack();
+          } catch (error) {
+            console.error("Failed to process message:", error);
+            message.retry();
+          }
+        })
+      )
+    );
   },
 };

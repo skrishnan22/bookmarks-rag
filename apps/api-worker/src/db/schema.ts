@@ -1,3 +1,4 @@
+import { SQL, sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -7,7 +8,15 @@ import {
   index,
   integer,
   vector,
+  customType,
+  jsonb,
 } from "drizzle-orm/pg-core";
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 export const users = pgTable(
   "users",
@@ -76,11 +85,19 @@ export const chunks = pgTable(
     position: integer("position").notNull(),
     tokenCount: integer("token_count"),
     embedding: vector("embedding", { dimensions: 1024 }),
+    contentTsv: tsvector("content_tsv").generatedAlwaysAs(
+      (): SQL => sql`to_tsvector('english', ${chunks.content})`
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (table) => [
     index("chunks_bookmark_id_idx").on(table.bookmarkId),
     index("chunks_position_idx").on(table.bookmarkId, table.position),
+    index("chunks_content_tsv_idx").using("gin", table.contentTsv),
+    index("chunks_embedding_hnsw_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops")
+    ),
   ]
 );
 
