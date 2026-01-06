@@ -18,6 +18,8 @@ import type { Root, RootContent, Heading, TableCell } from "mdast";
 export interface ChunkingConfig {
   maxTokens: number;
   overlapTokens: number;
+  hardMaxTokens: number;
+  minTokensForOverlap: number;
 }
 
 export interface TextChunk {
@@ -29,7 +31,9 @@ export interface TextChunk {
 
 export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
   maxTokens: 500,
-  overlapTokens: 125,
+  overlapTokens: 100,
+  hardMaxTokens: 550,
+  minTokensForOverlap: 250,
 };
 
 interface MarkdownSection {
@@ -42,6 +46,12 @@ interface MarkdownSection {
 interface ContentBlock {
   type: "atomic" | "splittable";
   content: string;
+}
+
+interface RawChunk {
+  content: string;
+  breadcrumb: string;
+  sectionId: number;
 }
 
 export function countTokens(text: string): number {
@@ -259,37 +269,85 @@ function splitLargeBlock(text: string, maxTokens: number): string[] {
 // OVERLAP LOGIC
 // ============================================================================
 
-/**
- * Adds overlap between consecutive chunks.
- *
- * When we split text into chunks, important context can be lost at boundaries.
- * By repeating the end of chunk N at the start of chunk N+1, we ensure that:
- * - Concepts spanning chunk boundaries are captured in at least one chunk
- * - Search queries have a better chance of matching relevant context
- *
- *
- * 1. First chunk stays as-is
- * 2. For each subsequent chunk:
- *    a. Take sentences from the END of previous chunk
- *    b. Accumulate until we have ~overlapTokens worth
- *    c. Prepend this overlap to the current chunk
- *
- * ## Sentence-aware overlap:
- *
- * We overlap by whole sentences rather than characters because:
- * - Partial sentences are confusing and hurt embedding quality
- * - Sentences are meaningful semantic units
- */
-function addOverlap(chunks: string[], overlapTokens: number): string[] {
-  if (chunks.length <= 1 || overlapTokens <= 0) {
+interface OverlapConfig {
+  overlapTokens: number;
+  hardMaxTokens: number;
+  minTokensForOverlap: number;
+}
+
+function extractOverlapFromChunk(
+  content: string,
+  overlapTokens: number
+): string {
+  const sentences = splitIntoSentences(content);
+  let overlapText = "";
+  let overlapCount = 0;
+
+  for (
+    let j = sentences.length - 1;
+    j >= 0 && overlapCount < overlapTokens;
+    j--
+  ) {
+    const sentence = sentences[j];
+    if (!sentence) continue;
+
+    const sentenceTokens = countTokens(sentence);
+
+    if (overlapCount + sentenceTokens <= overlapTokens * 1.5) {
+      overlapText = sentence + " " + overlapText;
+      overlapCount += sentenceTokens;
+    } else if (overlapCount === 0) {
+      overlapText = sentence + " ";
+      break;
+    } else {
+      break;
+    }
+  }
+
+  return overlapText.trim();
+}
+
+function trimOverlapToFit(
+  overlapText: string,
+  mainContent: string,
+  hardMaxTokens: number
+): string {
+  const mainTokens = countTokens(mainContent);
+  const separatorTokens = countTokens("\n\n");
+
+  let sentences = splitIntoSentences(overlapText);
+  let trimmedOverlap = overlapText;
+
+  while (sentences.length > 0) {
+    const overlapTokens = countTokens(trimmedOverlap);
+    const totalTokens = overlapTokens + separatorTokens + mainTokens;
+
+    if (totalTokens <= hardMaxTokens) {
+      return trimmedOverlap;
+    }
+
+    sentences.shift();
+    trimmedOverlap = sentences.join(" ");
+  }
+
+  return "";
+}
+
+function addOverlap(chunks: RawChunk[], config: OverlapConfig): RawChunk[] {
+  const { overlapTokens, hardMaxTokens, minTokensForOverlap } = config;
+
+  if (chunks.length === 0 || overlapTokens <= 0) {
     return chunks;
   }
 
-  const result: string[] = [];
+  const result: RawChunk[] = [];
   const firstChunk = chunks[0];
   if (firstChunk) {
-    result.push(firstChunk);
+    result.push({ ...firstChunk });
   }
+
+  const sectionFirstChunkIndex = new Map<number, number>();
+  sectionFirstChunkIndex.set(firstChunk?.sectionId ?? 0, 0);
 
   for (let i = 1; i < chunks.length; i++) {
     const prevChunk = chunks[i - 1];
@@ -297,33 +355,40 @@ function addOverlap(chunks: string[], overlapTokens: number): string[] {
 
     if (!prevChunk || !currentChunk) continue;
 
-    // Extract sentences from previous chunk
-    const prevSentences = splitIntoSentences(prevChunk);
-    let overlapText = "";
-    let overlapCount = 0;
-
-    for (
-      let j = prevSentences.length - 1;
-      j >= 0 && overlapCount < overlapTokens;
-      j--
-    ) {
-      const sentence = prevSentences[j];
-      if (!sentence) continue;
-
-      const sentenceTokens = countTokens(sentence);
-
-      if (overlapCount + sentenceTokens <= overlapTokens * 1.5) {
-        overlapText = sentence + " " + overlapText;
-        overlapCount += sentenceTokens;
-      } else if (overlapCount === 0) {
-        overlapText = sentence + " ";
-        break;
-      } else {
-        break;
-      }
+    const isFirstInSection = !sectionFirstChunkIndex.has(
+      currentChunk.sectionId
+    );
+    if (isFirstInSection) {
+      sectionFirstChunkIndex.set(currentChunk.sectionId, i);
     }
 
-    result.push(overlapText.trim() + "\n\n" + currentChunk);
+    const currentTokens = countTokens(currentChunk.content);
+    const isSameSection = prevChunk.sectionId === currentChunk.sectionId;
+    const isTooShort = currentTokens < minTokensForOverlap;
+
+    if (!isSameSection || isFirstInSection || isTooShort) {
+      result.push({ ...currentChunk });
+      continue;
+    }
+
+    let overlapText = extractOverlapFromChunk(prevChunk.content, overlapTokens);
+
+    if (overlapText) {
+      overlapText = trimOverlapToFit(
+        overlapText,
+        currentChunk.content,
+        hardMaxTokens
+      );
+    }
+
+    const newContent = overlapText
+      ? overlapText + "\n\n" + currentChunk.content
+      : currentChunk.content;
+
+    result.push({
+      ...currentChunk,
+      content: newContent,
+    });
   }
 
   return result;
@@ -349,18 +414,21 @@ export function chunkMarkdown(
   markdown: string,
   config: ChunkingConfig = DEFAULT_CHUNKING_CONFIG
 ): TextChunk[] {
-  const { maxTokens, overlapTokens } = config;
+  const { maxTokens, overlapTokens, hardMaxTokens, minTokensForOverlap } =
+    config;
 
   const sections = parseMarkdownSections(markdown);
 
-  const rawChunks: { content: string; breadcrumb: string }[] = [];
+  const rawChunks: RawChunk[] = [];
+  let sectionId = 0;
 
   for (const section of sections) {
     const breadcrumb = section.breadcrumb;
+    sectionId++;
 
     for (const block of section.contentBlocks) {
       if (block.type === "atomic") {
-        rawChunks.push({ content: block.content, breadcrumb });
+        rawChunks.push({ content: block.content, breadcrumb, sectionId });
       } else {
         const paragraphs = splitIntoParagraphs(block.content);
 
@@ -372,26 +440,33 @@ export function chunkMarkdown(
           if (countTokens(chunk) > maxTokens) {
             const subChunks = splitLargeBlock(chunk, maxTokens);
             for (const subChunk of subChunks) {
-              rawChunks.push({ content: subChunk, breadcrumb });
+              rawChunks.push({ content: subChunk, breadcrumb, sectionId });
             }
           } else {
-            rawChunks.push({ content: chunk, breadcrumb });
+            rawChunks.push({ content: chunk, breadcrumb, sectionId });
           }
         }
       }
     }
   }
 
-  const contents = rawChunks.map((c) => c.content);
-  const overlappedContents = addOverlap(contents, overlapTokens);
+  const overlappedChunks = addOverlap(rawChunks, {
+    overlapTokens,
+    hardMaxTokens,
+    minTokensForOverlap,
+  });
 
-  const chunks: TextChunk[] = overlappedContents.map((content, index) => {
-    const rawChunk = rawChunks[index];
+  const chunks: TextChunk[] = overlappedChunks.map((chunk, index) => {
+    const breadcrumbHeader = chunk.breadcrumb
+      ? `Section: ${chunk.breadcrumb}\n\n`
+      : "";
+    const contentWithHeader = breadcrumbHeader + chunk.content;
+
     return {
-      content,
+      content: contentWithHeader,
       position: index,
-      tokenCount: countTokens(content),
-      breadcrumbPath: rawChunk?.breadcrumb ?? "",
+      tokenCount: countTokens(contentWithHeader),
+      breadcrumbPath: chunk.breadcrumb,
     };
   });
 

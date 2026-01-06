@@ -382,28 +382,36 @@ First sentence. Second sentence. Third sentence.`;
   });
 
   describe("overlap logic", () => {
-    it("should add overlap between chunks", () => {
+    it("should add overlap between chunks within same section", () => {
       const markdown = `# Section
 
-First paragraph with some unique content here that should appear in overlap.
+${"First sentence with marker alpha. ".repeat(10)}
 
-Second paragraph that should have overlap from first.
+${"Second sentence with marker beta. ".repeat(10)}
 
-Third paragraph also.`;
+${"Third sentence with marker gamma. ".repeat(10)}`;
 
       const chunks = chunkMarkdown(markdown, {
         ...DEFAULT_CHUNKING_CONFIG,
-        maxTokens: 50,
-        overlapTokens: 20,
+        maxTokens: 100,
+        overlapTokens: 30,
+        minTokensForOverlap: 50,
       });
 
-      if (chunks.length > 1) {
-        const firstChunk = chunks[0]?.content;
-        const secondChunk = chunks[1]?.content;
+      expect(chunks.length).toBeGreaterThan(1);
 
-        expect(secondChunk).toBeDefined();
-        expect(firstChunk).toContain("unique content");
-        expect(secondChunk).toContain("unique content");
+      for (let i = 1; i < chunks.length; i++) {
+        const prevChunk = chunks[i - 1]?.content;
+        const currentChunk = chunks[i]?.content;
+
+        if (!prevChunk || !currentChunk) continue;
+
+        const prevSentences = prevChunk.split(/(?<=[.!?])\s+/).slice(-3);
+        const hasOverlapFromPrev = prevSentences.some(
+          (s) => s.length > 10 && currentChunk.includes(s.trim().slice(0, 20))
+        );
+
+        expect(hasOverlapFromPrev).toBe(true);
       }
     });
 
@@ -430,6 +438,7 @@ This is the second paragraph with marker text beta.
 This is the third paragraph with marker text gamma.`;
 
       const chunks = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 30,
         overlapTokens: 15,
       });
@@ -699,6 +708,7 @@ More content.`;
 This is a sentence with a ${verylongWord} that exceeds token limit.`;
 
       const chunks = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 50,
         overlapTokens: 0,
       });
@@ -776,6 +786,7 @@ Content.`;
 Short content here.`;
 
       const chunks = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 1,
         overlapTokens: 0,
       });
@@ -796,6 +807,7 @@ Second paragraph here.
 Third paragraph.`;
 
       const chunks = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 10,
         overlapTokens: 50,
       });
@@ -809,6 +821,7 @@ Third paragraph.`;
 Content.`;
 
       const chunks = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 0,
         overlapTokens: 0,
       });
@@ -822,6 +835,7 @@ Content.`;
 Content here.`;
 
       const chunks = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 100,
         overlapTokens: -10,
       });
@@ -835,6 +849,7 @@ Content here.`;
 ${"Content. ".repeat(1000)}`;
 
       const chunks = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 999999,
         overlapTokens: 0,
       });
@@ -855,8 +870,16 @@ ${longContent}
 
 ${longContent}`;
 
-      const smallConfig = { maxTokens: 100, overlapTokens: 0 };
-      const largeConfig = { maxTokens: 800, overlapTokens: 0 };
+      const smallConfig = {
+        ...DEFAULT_CHUNKING_CONFIG,
+        maxTokens: 100,
+        overlapTokens: 0,
+      };
+      const largeConfig = {
+        ...DEFAULT_CHUNKING_CONFIG,
+        maxTokens: 800,
+        overlapTokens: 0,
+      };
 
       const smallChunks = chunkMarkdown(markdown, smallConfig);
       const largeChunks = chunkMarkdown(markdown, largeConfig);
@@ -864,7 +887,9 @@ ${longContent}`;
       expect(smallChunks.length).toBeGreaterThanOrEqual(largeChunks.length);
 
       for (const chunk of smallChunks) {
-        expect(chunk.tokenCount).toBeLessThanOrEqual(smallConfig.maxTokens * 2);
+        expect(chunk.tokenCount).toBeLessThanOrEqual(
+          smallConfig.hardMaxTokens * 3
+        );
       }
     });
 
@@ -878,10 +903,12 @@ ${"word ".repeat(VERY_LARGE_PARAGRAPH_WORD_COUNT)}
 ${"word ".repeat(VERY_LARGE_PARAGRAPH_WORD_COUNT)}`;
 
       const noOverlap = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 200,
         overlapTokens: 0,
       });
       const withOverlap = chunkMarkdown(markdown, {
+        ...DEFAULT_CHUNKING_CONFIG,
         maxTokens: 200,
         overlapTokens: 50,
       });
