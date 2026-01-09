@@ -1,9 +1,15 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { createBookmarkSchema } from "@rag-bookmarks/shared";
 import type { Env, BookmarkIngestionMessage } from "../types.js";
 import { createDb } from "../db/index.js";
 import { BookmarkRepository } from "../repositories/bookmarks.js";
+
+const listBookmarksSchema = z.object({
+  limit: z.coerce.number().min(1).max(100).optional().default(20),
+  offset: z.coerce.number().min(0).optional().default(0),
+});
 
 // Test user ID for development (until auth is implemented)
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
@@ -29,7 +35,7 @@ bookmarksRouter.post(
   zValidator("json", createBookmarkSchema),
   async (c) => {
     const { url } = c.req.valid("json");
-    const db = createDb(c.env.DATABASE_URL);
+    const { db } = createDb(c.env.DATABASE_URL);
     const bookmarkRepo = new BookmarkRepository(db);
 
     // TODO: Get userId from auth context when implemented
@@ -96,7 +102,7 @@ bookmarksRouter.post(
  */
 bookmarksRouter.get("/:id", async (c) => {
   const { id } = c.req.param();
-  const db = createDb(c.env.DATABASE_URL);
+  const { db } = createDb(c.env.DATABASE_URL);
   const bookmarkRepo = new BookmarkRepository(db);
 
   try {
@@ -132,31 +138,43 @@ bookmarksRouter.get("/:id", async (c) => {
 /**
  * GET /api/v1/bookmarks
  *
- * List bookmarks for the current user.
+ * List bookmarks for the current user with pagination.
+ *
+ * Query params:
+ *   limit: Max results to return (optional, 1-100, default 20)
+ *   offset: Number of results to skip (optional, default 0)
  */
-bookmarksRouter.get("/", async (c) => {
-  const db = createDb(c.env.DATABASE_URL);
-  const bookmarkRepo = new BookmarkRepository(db);
+bookmarksRouter.get(
+  "/",
+  zValidator("query", listBookmarksSchema),
+  async (c) => {
+    const { limit, offset } = c.req.valid("query");
+    const { db } = createDb(c.env.DATABASE_URL);
+    const bookmarkRepo = new BookmarkRepository(db);
 
-  // TODO: Get userId from auth context
-  const userId = TEST_USER_ID;
+    // TODO: Get userId from auth context
+    const userId = TEST_USER_ID;
 
-  try {
-    const bookmarks = await bookmarkRepo.listByUser(userId);
-    return c.json({
-      success: true,
-      data: bookmarks,
-    });
-  } catch (error) {
-    console.error("Error listing bookmarks:", error);
-    return c.json(
-      {
-        success: false,
-        error: { code: "INTERNAL_ERROR", message: "Failed to list bookmarks" },
-      },
-      500
-    );
+    try {
+      const bookmarks = await bookmarkRepo.listByUser(userId, limit, offset);
+      return c.json({
+        success: true,
+        data: bookmarks,
+      });
+    } catch (error) {
+      console.error("Error listing bookmarks:", error);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Failed to list bookmarks",
+          },
+        },
+        500
+      );
+    }
   }
-});
+);
 
 export { bookmarksRouter };

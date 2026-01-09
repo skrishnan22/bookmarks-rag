@@ -81,27 +81,21 @@ app.onError((err, c) => {
   );
 });
 
-/**
- * Queue consumer handler
- * Processes bookmark ingestion messages from the queue
- */
 async function handleQueueMessage(
   message: BookmarkIngestionMessage,
-  env: Env
+  env: Env,
+  bookmarkRepo: BookmarkRepository,
+  chunkRepo: ChunkRepository
 ): Promise<void> {
   const { bookmarkId, url } = message;
   console.log(`Processing bookmark ${bookmarkId}: ${url}`);
-
-  const db = createDb(env.DATABASE_URL);
-  const bookmarkRepo = new BookmarkRepository(db);
-  const chunkRepo = new ChunkRepository(db);
 
   try {
     // Update status to processing
     await bookmarkRepo.update({ id: bookmarkId, status: "PROCESSING" });
 
     // Step 1: Fetch URL and convert to markdown
-    const { title, markdown } = await fetchAndConvertToMarkdown(url);
+    const { title, markdown, metadata } = await fetchAndConvertToMarkdown(url);
     console.log(
       `Bookmark ${bookmarkId}: Extracted title "${title}", markdown length: ${markdown.length}`
     );
@@ -117,6 +111,9 @@ async function handleQueueMessage(
     await bookmarkRepo.update({
       id: bookmarkId,
       title,
+      ...(metadata.description && { description: metadata.description }),
+      ...(metadata.favicon && { favicon: metadata.favicon }),
+      ...(metadata.ogImage && { ogImage: metadata.ogImage }),
       markdown,
       summary,
     });
@@ -150,7 +147,9 @@ async function handleQueueMessage(
 
       const embeddingProvider = createEmbeddingProvider(
         "jina",
-        env.JINA_API_KEY
+        env.JINA_API_KEY,
+        "jina-embeddings-v3",
+        "retrieval.passage"
       );
 
       const chunkContents = storedChunks.map((chunk) => chunk.content);
@@ -197,18 +196,6 @@ async function handleQueueMessage(
       status: "FAILED",
       errorMessage,
     });
-
-    await bookmarkRepo.update({
-      id: bookmarkId,
-      status: "FAILED",
-      errorMessage,
-    });
-
-    await bookmarkRepo.update({
-      id: bookmarkId,
-      status: "FAILED",
-      errorMessage,
-    });
   }
 }
 
@@ -224,20 +211,33 @@ export default {
   ): Promise<void> {
     console.log(`Processing batch of ${batch.messages.length} messages`);
 
-    const limit = pLimit(5);
+    const { db, close } = createDb(env.DATABASE_URL);
+    const bookmarkRepo = new BookmarkRepository(db);
+    const chunkRepo = new ChunkRepository(db);
 
-    await Promise.all(
-      batch.messages.map((message) =>
-        limit(async () => {
-          try {
-            await handleQueueMessage(message.body, env);
-            message.ack();
-          } catch (error) {
-            console.error("Failed to process message:", error);
-            message.retry();
-          }
-        })
-      )
-    );
+    const limit = pLimit(2);
+
+    try {
+      await Promise.all(
+        batch.messages.map((message) =>
+          limit(async () => {
+            try {
+              await handleQueueMessage(
+                message.body,
+                env,
+                bookmarkRepo,
+                chunkRepo
+              );
+              message.ack();
+            } catch (error) {
+              console.error("Failed to process message:", error);
+              message.retry();
+            }
+          })
+        )
+      );
+    } finally {
+      await close();
+    }
   },
 };

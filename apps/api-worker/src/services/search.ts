@@ -20,6 +20,9 @@ export interface SearchResultItem {
   bookmarkId: string;
   bookmarkTitle: string | null;
   bookmarkUrl: string;
+  bookmarkFavicon: string | null;
+  bookmarkOgImage: string | null;
+  bookmarkDescription: string | null;
   chunkContent: string;
   breadcrumbPath: string | null;
   score: number;
@@ -129,6 +132,9 @@ async function enrichWithBookmarkMetadata(
       bookmarkId: r.bookmarkId,
       bookmarkTitle: bookmark?.title ?? null,
       bookmarkUrl: bookmark?.url ?? "",
+      bookmarkFavicon: bookmark?.favicon ?? null,
+      bookmarkOgImage: bookmark?.ogImage ?? null,
+      bookmarkDescription: bookmark?.description ?? null,
       chunkContent: r.content,
       breadcrumbPath: r.breadcrumbPath,
       score: r.finalScore,
