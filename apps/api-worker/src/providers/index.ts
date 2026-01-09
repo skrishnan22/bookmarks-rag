@@ -14,7 +14,11 @@ import {
   OpenRouterEmbeddingProvider,
   OpenRouterLLMProvider,
 } from "./openrouter.js";
-import { JinaEmbeddingProvider, JinaRerankerProvider } from "./jina.js";
+import {
+  JinaEmbeddingProvider,
+  JinaRerankerProvider,
+  type JinaEmbeddingTask,
+} from "./jina.js";
 
 export type {
   EmbeddingProvider,
@@ -36,13 +40,14 @@ export type {
 export function createEmbeddingProvider(
   provider: "openrouter" | "openai" | "voyage" | "jina",
   apiKey: string,
-  model?: string
+  model?: string,
+  task?: JinaEmbeddingTask
 ): EmbeddingProvider {
   switch (provider) {
     case "openrouter":
       return new OpenRouterEmbeddingProvider(apiKey, model);
     case "jina":
-      return new JinaEmbeddingProvider(apiKey, model);
+      return new JinaEmbeddingProvider(apiKey, model, task);
     case "openai":
       throw new Error("OpenAI provider not yet implemented");
     case "voyage":

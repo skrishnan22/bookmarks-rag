@@ -66,12 +66,12 @@ export class SearchRepository {
           c.content,
           c.breadcrumb_path,
           ROW_NUMBER() OVER (
-            ORDER BY ts_rank(to_tsvector('english', c.content), plainto_tsquery('english', ${queryText})) DESC
+            ORDER BY ts_rank(c.content_tsv, plainto_tsquery('english', ${queryText})) DESC
           ) as bm25_rank
         FROM chunks c
         JOIN bookmarks b ON c.bookmark_id = b.id
         WHERE b.user_id = ${userId}
-          AND to_tsvector('english', c.content) @@ plainto_tsquery('english', ${queryText})
+          AND c.content_tsv @@ plainto_tsquery('english', ${queryText})
         LIMIT 20
       ),
       combined AS (

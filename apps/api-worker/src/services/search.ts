@@ -25,9 +25,9 @@ export interface SearchResultItem {
   score: number;
 }
 
-const DEFAULT_TOP_K = 20;
+const DEFAULT_TOP_K = 100;
 const DEFAULT_TOP_N = 5;
-const DEFAULT_THRESHOLD = 0.3;
+const DEFAULT_RERANKER_THRESHOLD = 0.1;
 
 export async function search(
   options: SearchOptions,
@@ -39,9 +39,10 @@ export async function search(
   const { query, userId } = options;
   const topK = options.topK ?? DEFAULT_TOP_K;
   const topN = options.topN ?? DEFAULT_TOP_N;
-  const threshold = options.threshold ?? DEFAULT_THRESHOLD;
+  const rerankerThreshold = options.threshold ?? DEFAULT_RERANKER_THRESHOLD;
 
   const queryEmbedding = await embeddingProvider.embed(query);
+  console.log(JSON.stringify(queryEmbedding));
   const hybridResults = await searchRepo.hybridSearch(
     userId,
     queryEmbedding,
@@ -54,6 +55,7 @@ export async function search(
   }
 
   let rankedResults: Array<HybridSearchResult & { finalScore: number }>;
+  let useRerankerScores = false;
 
   if (rerankerProvider) {
     try {
@@ -63,6 +65,7 @@ export async function search(
         rerankerProvider,
         topN
       );
+      useRerankerScores = true;
     } catch (error) {
       console.warn("Reranking failed, falling back to RRF scores:", error);
       rankedResults = hybridResults.slice(0, topN).map((r) => ({
@@ -77,9 +80,11 @@ export async function search(
     }));
   }
 
-  const filteredResults = rankedResults.filter(
-    (r) => r.finalScore >= threshold
-  );
+  // Only apply threshold to reranker scores (0-1 range).
+  // RRF scores are rank-based (~0.01-0.03 range) and should not be thresholded.
+  const filteredResults = useRerankerScores
+    ? rankedResults.filter((r) => r.finalScore >= rerankerThreshold)
+    : rankedResults;
 
   return enrichWithBookmarkMetadata(filteredResults, bookmarkRepo);
 }

@@ -13,7 +13,7 @@ binding = "INGESTION_QUEUE"
 
 [[queues.consumers]]
 queue = "bookmark-ingestion"
-max_batch_size = 1        # Process one bookmark at a time (long-running task)
+max_batch_size = 10       # Increased from 1 to 10 for parallel processing
 max_batch_timeout = 5     # Wait up to 5 seconds to batch
 
 # Secrets (set via wrangler secret put):
