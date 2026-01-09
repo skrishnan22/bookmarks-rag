@@ -10,6 +10,9 @@ export interface CreateBookmarkParams {
 export interface UpdateBookmarkParams {
   id: string;
   title?: string;
+  description?: string;
+  favicon?: string;
+  ogImage?: string;
   summary?: string;
   markdown?: string;
   status?: BookmarkStatus;

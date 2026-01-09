@@ -57,6 +57,9 @@ export const bookmarks = pgTable(
       .references(() => users.id, { onDelete: "cascade" }), //TODO=> What is this?
     url: text("url").notNull(),
     title: text("title"),
+    description: text("description"),
+    favicon: text("favicon"),
+    ogImage: text("og_image"),
     summary: text("summary"),
     markdown: text("markdown"),
     status: text("status").$type<BookmarkStatus>().default("PENDING").notNull(),
