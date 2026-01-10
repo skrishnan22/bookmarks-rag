@@ -10,6 +10,8 @@ import {
   vector,
   customType,
   jsonb,
+  real,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 const tsvector = customType<{ data: string }>({
@@ -54,7 +56,7 @@ export const bookmarks = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id")
       .notNull()
-      .references(() => users.id, { onDelete: "cascade" }), //TODO=> What is this?
+      .references(() => users.id, { onDelete: "cascade" }),
     url: text("url").notNull(),
     title: text("title"),
     description: text("description"),
@@ -104,6 +106,52 @@ export const chunks = pgTable(
   ]
 );
 
+export const topics = pgTable(
+  "topics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    keywords: jsonb("keywords").$type<string[]>().default([]),
+    centroid: vector("centroid", { dimensions: 1024 }),
+    isUncategorized: integer("is_uncategorized").default(0).notNull(),
+    bookmarkCount: integer("bookmark_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("topics_user_id_idx").on(table.userId),
+    uniqueIndex("topics_user_name_idx").on(table.userId, table.name),
+    index("topics_centroid_hnsw_idx").using(
+      "hnsw",
+      table.centroid.op("vector_cosine_ops")
+    ),
+  ]
+);
+
+export const bookmarkTopics = pgTable(
+  "bookmark_topics",
+  {
+    bookmarkId: uuid("bookmark_id")
+      .notNull()
+      .references(() => bookmarks.id, { onDelete: "cascade" }),
+    topicId: uuid("topic_id")
+      .notNull()
+      .references(() => topics.id, { onDelete: "cascade" }),
+    score: real("score").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.bookmarkId, table.topicId] }),
+    index("bookmark_topics_bookmark_id_idx").on(table.bookmarkId),
+    index("bookmark_topics_topic_id_idx").on(table.topicId),
+    index("bookmark_topics_score_idx").on(table.topicId, table.score),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
@@ -112,3 +160,9 @@ export type NewBookmark = typeof bookmarks.$inferInsert;
 
 export type Chunk = typeof chunks.$inferSelect;
 export type NewChunk = typeof chunks.$inferInsert;
+
+export type Topic = typeof topics.$inferSelect;
+export type NewTopic = typeof topics.$inferInsert;
+
+export type BookmarkTopic = typeof bookmarkTopics.$inferSelect;
+export type NewBookmarkTopic = typeof bookmarkTopics.$inferInsert;

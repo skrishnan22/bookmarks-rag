@@ -3,20 +3,33 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import pLimit from "p-limit";
 
-import type { Env, BookmarkIngestionMessage } from "./types.js";
+import type {
+  Env,
+  BookmarkIngestionMessage,
+  ClusteringMessage,
+} from "./types.js";
 import { bookmarksRouter } from "./routes/bookmarks.js";
 import { searchRouter } from "./routes/search.js";
+import { topicsRouter } from "./routes/topics.js";
 import { createDb } from "./db/index.js";
 import { BookmarkRepository } from "./repositories/bookmarks.js";
 import { ChunkRepository } from "./repositories/chunks.js";
+import { TopicRepository } from "./repositories/topics.js";
 import { chunkMarkdown } from "./services/chunking.js";
 import {
   createEmbeddingProvider,
   createLLMProvider,
 } from "./providers/index.js";
-import { generateEmbeddings } from "./services/embedding.js";
+import { generateEmbedding, generateEmbeddings } from "./services/embedding.js";
 import { fetchAndConvertToMarkdown } from "./services/html-to-markdown.js";
 import { generateSummary } from "./services/summary.js";
+import { users } from "./db/schema.js";
+import type { Database } from "./db/index.js";
+
+async function getAllUserIds(db: Database): Promise<string[]> {
+  const result = await db.select({ id: users.id }).from(users);
+  return result.map((r) => r.id);
+}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -47,6 +60,11 @@ app.get("/api/v1", (c) => {
       "GET /api/v1/bookmarks/:id",
       "DELETE /api/v1/bookmarks/:id",
       "GET /api/v1/search",
+      "GET /api/v1/topics",
+      "GET /api/v1/topics/:id",
+      "GET /api/v1/topics/:id/bookmarks",
+      "PUT /api/v1/topics/:id",
+      "POST /api/v1/topics/recluster",
     ],
   });
 });
@@ -54,6 +72,7 @@ app.get("/api/v1", (c) => {
 // Mount routes
 app.route("/api/v1/bookmarks", bookmarksRouter);
 app.route("/api/v1/search", searchRouter);
+app.route("/api/v1/topics", topicsRouter);
 
 // 404 handler
 app.notFound((c) => {
@@ -81,33 +100,38 @@ app.onError((err, c) => {
   );
 });
 
-async function handleQueueMessage(
+async function handleIngestionMessage(
   message: BookmarkIngestionMessage,
   env: Env,
   bookmarkRepo: BookmarkRepository,
-  chunkRepo: ChunkRepository
+  chunkRepo: ChunkRepository,
+  topicRepo: TopicRepository
 ): Promise<void> {
-  const { bookmarkId, url } = message;
+  const { bookmarkId, url, userId } = message;
   console.log(`Processing bookmark ${bookmarkId}: ${url}`);
 
+  //TODO => skip already completed steps
   try {
-    // Update status to processing
     await bookmarkRepo.update({ id: bookmarkId, status: "PROCESSING" });
 
-    // Step 1: Fetch URL and convert to markdown
     const { title, markdown, metadata } = await fetchAndConvertToMarkdown(url);
     console.log(
       `Bookmark ${bookmarkId}: Extracted title "${title}", markdown length: ${markdown.length}`
     );
 
-    // Step 2: Generate summary
     const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
     const summary = await generateSummary(markdown, title, llmProvider);
     console.log(
       `Bookmark ${bookmarkId}: Generated summary (${summary.length} chars)`
     );
 
-    // Step 3: Update bookmark with extracted content and summary
+    const embeddingProvider = createEmbeddingProvider(
+      "jina",
+      env.JINA_API_KEY,
+      "jina-embeddings-v3",
+      "retrieval.passage"
+    );
+
     await bookmarkRepo.update({
       id: bookmarkId,
       title,
@@ -118,7 +142,6 @@ async function handleQueueMessage(
       summary,
     });
 
-    // Step 4: Chunk the markdown
     const textChunks = chunkMarkdown(markdown);
     const chunksWithBreadcrumbs = textChunks.filter(
       (c) => c.breadcrumbPath
@@ -127,10 +150,8 @@ async function handleQueueMessage(
       `Bookmark ${bookmarkId}: Created ${textChunks.length} chunks (${chunksWithBreadcrumbs} with breadcrumbs)`
     );
 
-    // Step 5: Delete existing chunks (in case of re-processing)
     await chunkRepo.deleteByBookmarkId(bookmarkId);
 
-    // Step 6: Store chunks in database
     if (textChunks.length > 0) {
       const chunkParams = textChunks.map((chunk) => ({
         bookmarkId,
@@ -143,13 +164,6 @@ async function handleQueueMessage(
       const storedChunks = await chunkRepo.createMany(chunkParams);
       console.log(
         `Bookmark ${bookmarkId}: Stored ${storedChunks.length} chunks`
-      );
-
-      const embeddingProvider = createEmbeddingProvider(
-        "jina",
-        env.JINA_API_KEY,
-        "jina-embeddings-v3",
-        "retrieval.passage"
       );
 
       const chunkContents = storedChunks.map((chunk) => chunk.content);
@@ -177,9 +191,9 @@ async function handleQueueMessage(
       console.log(
         `Bookmark ${bookmarkId}: Stored embeddings for ${embeddings.length} chunks`
       );
+      console.log(`Bookmark ${bookmarkId}: Stored bookmark embedding`);
     }
 
-    // Mark as done
     await bookmarkRepo.update({
       id: bookmarkId,
       status: "DONE",
@@ -204,40 +218,51 @@ export default {
   // HTTP request handler
   fetch: app.fetch,
 
-  // Queue consumer handler
+  // Queue consumer handler - routes to appropriate handler based on queue
   async queue(
-    batch: MessageBatch<BookmarkIngestionMessage>,
+    batch: MessageBatch<BookmarkIngestionMessage | ClusteringMessage>,
     env: Env
   ): Promise<void> {
-    console.log(`Processing batch of ${batch.messages.length} messages`);
+    console.log(
+      `Processing batch of ${batch.messages.length} messages from queue: ${batch.queue}`
+    );
 
-    const { db, close } = createDb(env.DATABASE_URL);
-    const bookmarkRepo = new BookmarkRepository(db);
-    const chunkRepo = new ChunkRepository(db);
+    if (batch.queue === "bookmark-ingestion") {
+      const { db, close } = createDb(env.DATABASE_URL);
+      const bookmarkRepo = new BookmarkRepository(db);
+      const chunkRepo = new ChunkRepository(db);
+      const topicRepo = new TopicRepository(db);
 
-    const limit = pLimit(2);
+      const limit = pLimit(2);
 
-    try {
-      await Promise.all(
-        batch.messages.map((message) =>
-          limit(async () => {
-            try {
-              await handleQueueMessage(
-                message.body,
-                env,
-                bookmarkRepo,
-                chunkRepo
-              );
-              message.ack();
-            } catch (error) {
-              console.error("Failed to process message:", error);
-              message.retry();
-            }
-          })
-        )
-      );
-    } finally {
-      await close();
+      try {
+        await Promise.all(
+          batch.messages.map((message) =>
+            limit(async () => {
+              try {
+                await handleIngestionMessage(
+                  message.body as BookmarkIngestionMessage,
+                  env,
+                  bookmarkRepo,
+                  chunkRepo,
+                  topicRepo
+                );
+                message.ack();
+              } catch (error) {
+                console.error("Failed to process ingestion message:", error);
+                message.retry();
+              }
+            })
+          )
+        );
+      } finally {
+        await close();
+      }
+    } else {
+      console.error(`Unknown queue: ${batch.queue}`);
+      for (const message of batch.messages) {
+        message.ack();
+      }
     }
   },
 };

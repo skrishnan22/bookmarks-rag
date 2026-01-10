@@ -85,6 +85,7 @@ export class JinaEmbeddingProvider implements EmbeddingProvider {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
+        Accept: "application/json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -126,6 +127,7 @@ export class JinaRerankerProvider implements RerankerProvider {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
+        Accept: "application/json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
