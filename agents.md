@@ -1,13 +1,35 @@
 # Agent Rules
 
+## Mindset & Process
+
+- THINK A LOT PLEASE
+- **No breadcrumbs**. If you delete or move code, do not leave a comment in the old place. No "// moved to X", no "relocated". Just remove it.
+- **Think hard, do not lose the plot**.
+- Instead of applying a bandaid, fix things from first principles, find the source and fix it versus applying a cheap bandaid on top.
+- When taking on new work, follow this order:
+  1. Think about the architecture.
+  2. Research official docs, blogs, or papers on the best architecture.
+  3. Review the existing codebase.
+  4. Compare the research with the codebase to choose the best fit.
+  5. Implement the fix or ask about the tradeoffs the user is willing to make.
+
+- **Search before pivoting**. If you are stuck or uncertain, do a quick web search for official docs or specs, then continue with the current approach. Do not change direction unless asked.
+- If code is very confusing or hard to understand:
+  1. Try to simplify it.
+  1. Add an ASCII art diagram in a code comment if it would help.
+
 ## Coding Standards
 
+- Write idiomatic, simple, maintainable code. Always ask yourself if this is the most simple intuitive solution to the problem.
 - Follow proper coding standards for the language/framework being used
 - Use best practices for the chosen stack (Hono, TypeScript, PostgreSQL, Cloudflare Workers)
 - Code should be modular, testable, and well-structured
 - Follow design patterns where applicable (Repository pattern for DB, Service layer for business logic, etc.)
 - Avoid premature abstraction - start simple, refactor when patterns emerge
 - Do not overuse comments. add comments to explain why or how a function works. dont add line level comments unless absolutely necessary. Do not add format or section comments
+- Abstractions: Consciously constrained, pragmatically parameterised, doggedly documented.
+- Leave each repo better than how you found it. If something is giving a code smell, fix it for the next person.
+- Clean up unused code ruthlessly. If a function no longer needs a parameter or a helper is dead, delete it and update the callers instead of letting the junk linger.
 
 ## TypeScript Guidelines
 
