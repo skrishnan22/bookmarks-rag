@@ -166,3 +166,102 @@ export type NewTopic = typeof topics.$inferInsert;
 
 export type BookmarkTopic = typeof bookmarkTopics.$inferSelect;
 export type NewBookmarkTopic = typeof bookmarkTopics.$inferInsert;
+
+export const entityTypeEnum = ["book", "movie", "tv_show"] as const;
+export type EntityType = (typeof entityTypeEnum)[number];
+
+export const entityStatusEnum = [
+  "pending",
+  "enriched",
+  "ambiguous",
+  "failed",
+] as const;
+export type EntityStatus = (typeof entityStatusEnum)[number];
+
+export interface BookMetadata {
+  canonical_title?: string;
+  authors?: string[];
+  cover_url?: string;
+  year?: number;
+  isbn?: string;
+  openlibrary_key?: string;
+  page_count?: number;
+  subjects?: string[];
+}
+
+export interface MovieMetadata {
+  canonical_title?: string;
+  directors?: string[];
+  poster_url?: string;
+  year?: number;
+  tmdb_id?: number;
+  imdb_id?: string;
+  runtime?: number;
+  genres?: string[];
+}
+
+export interface TvShowMetadata {
+  canonical_title?: string;
+  creators?: string[];
+  poster_url?: string;
+  first_air_year?: number;
+  tmdb_id?: number;
+  seasons?: number;
+  genres?: string[];
+}
+
+export type EntityMetadata = BookMetadata | MovieMetadata | TvShowMetadata;
+
+export const entities = pgTable(
+  "entities",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").$type<EntityType>().notNull(),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    externalId: text("external_id"),
+    status: text("status").$type<EntityStatus>().default("pending").notNull(),
+    metadata: jsonb("metadata").$type<EntityMetadata>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("entities_user_type_idx").on(table.userId, table.type),
+    uniqueIndex("entities_user_type_normalized_idx").on(
+      table.userId,
+      table.type,
+      table.normalizedName
+    ),
+    index("entities_status_idx").on(table.status),
+    index("entities_external_id_idx").on(table.externalId),
+  ]
+);
+
+export const entityBookmarks = pgTable(
+  "entity_bookmarks",
+  {
+    entityId: uuid("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    bookmarkId: uuid("bookmark_id")
+      .notNull()
+      .references(() => bookmarks.id, { onDelete: "cascade" }),
+    contextSnippet: text("context_snippet"),
+    confidence: real("confidence").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.entityId, table.bookmarkId] }),
+    index("entity_bookmarks_bookmark_idx").on(table.bookmarkId),
+    index("entity_bookmarks_entity_idx").on(table.entityId),
+  ]
+);
+
+export type Entity = typeof entities.$inferSelect;
+export type NewEntity = typeof entities.$inferInsert;
+
+export type EntityBookmark = typeof entityBookmarks.$inferSelect;
+export type NewEntityBookmark = typeof entityBookmarks.$inferInsert;
