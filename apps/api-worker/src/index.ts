@@ -7,6 +7,7 @@ import type {
   Env,
   BookmarkIngestionMessage,
   ClusteringMessage,
+  EntityExtractionMessage,
 } from "./types.js";
 import { bookmarksRouter } from "./routes/bookmarks.js";
 import { searchRouter } from "./routes/search.js";
@@ -14,22 +15,17 @@ import { topicsRouter } from "./routes/topics.js";
 import { createDb } from "./db/index.js";
 import { BookmarkRepository } from "./repositories/bookmarks.js";
 import { ChunkRepository } from "./repositories/chunks.js";
-import { TopicRepository } from "./repositories/topics.js";
+import { EntityRepository } from "./repositories/entities.js";
 import { chunkMarkdown } from "./services/chunking.js";
 import {
   createEmbeddingProvider,
   createLLMProvider,
 } from "./providers/index.js";
-import { generateEmbedding, generateEmbeddings } from "./services/embedding.js";
+import { generateEmbeddings } from "./services/embedding.js";
 import { fetchAndConvertToMarkdown } from "./services/html-to-markdown.js";
 import { generateSummary } from "./services/summary.js";
-import { users } from "./db/schema.js";
-import type { Database } from "./db/index.js";
-
-async function getAllUserIds(db: Database): Promise<string[]> {
-  const result = await db.select({ id: users.id }).from(users);
-  return result.map((r) => r.id);
-}
+import { extractEntities } from "./services/entity-extraction.js";
+import { normalizeEntityName } from "./utils/normalize.js";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -104,8 +100,7 @@ async function handleIngestionMessage(
   message: BookmarkIngestionMessage,
   env: Env,
   bookmarkRepo: BookmarkRepository,
-  chunkRepo: ChunkRepository,
-  topicRepo: TopicRepository
+  chunkRepo: ChunkRepository
 ): Promise<void> {
   const { bookmarkId, url, userId } = message;
   console.log(`Processing bookmark ${bookmarkId}: ${url}`);
@@ -199,6 +194,9 @@ async function handleIngestionMessage(
       status: "DONE",
     });
 
+    await env.ENTITY_QUEUE.send({ bookmarkId, userId });
+    console.log(`Bookmark ${bookmarkId}: Enqueued entity extraction`);
+
     console.log(`Bookmark ${bookmarkId} processed successfully`);
   } catch (error) {
     console.error(`Failed to process bookmark ${bookmarkId}:`, error);
@@ -213,6 +211,80 @@ async function handleIngestionMessage(
   }
 }
 
+async function handleEntityExtractionMessage(
+  message: EntityExtractionMessage,
+  env: Env,
+  bookmarkRepo: BookmarkRepository,
+  entityRepo: EntityRepository
+): Promise<void> {
+  const { bookmarkId, userId } = message;
+  console.log(`Entity extraction for bookmark ${bookmarkId}`);
+
+  const bookmark = await bookmarkRepo.findById(bookmarkId);
+  if (!bookmark || !bookmark.markdown) {
+    console.log(`Bookmark ${bookmarkId}: No content for entity extraction`);
+    return;
+  }
+
+  const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
+
+  const extracted = await extractEntities(
+    bookmark.markdown,
+    bookmark.title ?? "",
+    bookmark.url,
+    llmProvider
+  );
+
+  if (extracted.length === 0) {
+    console.log(`Bookmark ${bookmarkId}: No entities extracted`);
+    return;
+  }
+
+  console.log(`Bookmark ${bookmarkId}: Extracted ${extracted.length} entities`);
+
+  for (const entity of extracted) {
+    const normalizedName = normalizeEntityName(entity.name);
+
+    const existing = await entityRepo.findByNormalizedName(
+      userId,
+      entity.type,
+      normalizedName
+    );
+
+    if (existing) {
+      await entityRepo.linkToBookmark({
+        entityId: existing.id,
+        bookmarkId,
+        contextSnippet: entity.contextSnippet,
+        confidence: entity.confidence,
+      });
+      console.log(
+        `Bookmark ${bookmarkId}: Linked existing entity "${entity.name}"`
+      );
+    } else {
+      const newEntity = await entityRepo.create({
+        userId,
+        type: entity.type,
+        name: entity.name,
+        normalizedName,
+        status: "pending",
+      });
+
+      await entityRepo.linkToBookmark({
+        entityId: newEntity.id,
+        bookmarkId,
+        contextSnippet: entity.contextSnippet,
+        confidence: entity.confidence,
+      });
+      console.log(
+        `Bookmark ${bookmarkId}: Created new entity "${entity.name}"`
+      );
+    }
+  }
+
+  console.log(`Bookmark ${bookmarkId}: Entity extraction complete`);
+}
+
 // Export for Cloudflare Workers
 export default {
   // HTTP request handler
@@ -220,7 +292,9 @@ export default {
 
   // Queue consumer handler - routes to appropriate handler based on queue
   async queue(
-    batch: MessageBatch<BookmarkIngestionMessage | ClusteringMessage>,
+    batch: MessageBatch<
+      BookmarkIngestionMessage | ClusteringMessage | EntityExtractionMessage
+    >,
     env: Env
   ): Promise<void> {
     console.log(
@@ -231,7 +305,6 @@ export default {
       const { db, close } = createDb(env.DATABASE_URL);
       const bookmarkRepo = new BookmarkRepository(db);
       const chunkRepo = new ChunkRepository(db);
-      const topicRepo = new TopicRepository(db);
 
       const limit = pLimit(2);
 
@@ -244,12 +317,43 @@ export default {
                   message.body as BookmarkIngestionMessage,
                   env,
                   bookmarkRepo,
-                  chunkRepo,
-                  topicRepo
+                  chunkRepo
                 );
                 message.ack();
               } catch (error) {
                 console.error("Failed to process ingestion message:", error);
+                message.retry();
+              }
+            })
+          )
+        );
+      } finally {
+        await close();
+      }
+    } else if (batch.queue === "entity-extraction") {
+      const { db, close } = createDb(env.DATABASE_URL);
+      const bookmarkRepo = new BookmarkRepository(db);
+      const entityRepo = new EntityRepository(db);
+
+      const limit = pLimit(2);
+
+      try {
+        await Promise.all(
+          batch.messages.map((message) =>
+            limit(async () => {
+              try {
+                await handleEntityExtractionMessage(
+                  message.body as EntityExtractionMessage,
+                  env,
+                  bookmarkRepo,
+                  entityRepo
+                );
+                message.ack();
+              } catch (error) {
+                console.error(
+                  "Failed to process entity extraction message:",
+                  error
+                );
                 message.retry();
               }
             })
