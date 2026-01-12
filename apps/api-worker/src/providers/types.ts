@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 /**
  * Provider interfaces for AI services
  *
@@ -25,15 +27,15 @@ export interface EmbeddingProvider {
  * LLM provider interface for text generation
  */
 export interface LLMProvider {
-  /**
-   * Generate a completion for a prompt
-   */
   complete(prompt: string, options?: LLMOptions): Promise<string>;
 
-  /**
-   * Generate a completion with structured messages
-   */
   chat(messages: ChatMessage[], options?: LLMOptions): Promise<string>;
+
+  generateObject<T extends z.ZodTypeAny>(
+    messages: ChatMessage[],
+    schema: T,
+    options?: LLMOptions
+  ): Promise<z.infer<T>>;
 }
 
 /**

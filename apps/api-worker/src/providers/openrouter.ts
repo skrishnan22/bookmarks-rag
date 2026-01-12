@@ -6,7 +6,8 @@
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { embed, embedMany, generateText } from "ai";
+import { embed, embedMany, generateText, generateObject } from "ai";
+import type { z } from "zod";
 import type {
   EmbeddingProvider,
   LLMProvider,
@@ -106,5 +107,23 @@ export class OpenRouterLLMProvider implements LLMProvider {
       ...(options?.stopSequences && { stopSequences: options.stopSequences }),
     });
     return text;
+  }
+
+  async generateObject<T extends z.ZodTypeAny>(
+    messages: ChatMessage[],
+    schema: T,
+    options?: LLMOptions
+  ): Promise<z.infer<T>> {
+    const { object } = await generateObject({
+      model: this.openai(this.model),
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      schema,
+      ...(options?.maxTokens && { maxOutputTokens: options.maxTokens }),
+      ...(options?.temperature && { temperature: options.temperature }),
+    });
+    return object;
   }
 }
