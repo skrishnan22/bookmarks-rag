@@ -16,6 +16,15 @@ queue = "bookmark-ingestion"
 max_batch_size = 10       # Increased from 1 to 10 for parallel processing
 max_batch_timeout = 5     # Wait up to 5 seconds to batch
 
+[[queues.producers]]
+queue = "entity-extraction"
+binding = "ENTITY_QUEUE"
+
+[[queues.consumers]]
+queue = "entity-extraction"
+max_batch_size = 5
+max_batch_timeout = 10
+
 # Secrets (set via wrangler secret put):
 # - DATABASE_URL
 # - OPENROUTER_API_KEY  (LLM for summaries)
@@ -23,3 +32,4 @@ max_batch_timeout = 5     # Wait up to 5 seconds to batch
 # - GOOGLE_CLIENT_ID
 # - GOOGLE_CLIENT_SECRET
 # - JWT_SECRET
+# - TMDB_API_KEY        (movie/TV enrichment)
