@@ -9,38 +9,98 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as EntitiesRouteImport } from './routes/entities'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EntitiesTvShowsRouteImport } from './routes/entities/tv-shows'
+import { Route as EntitiesMoviesRouteImport } from './routes/entities/movies'
+import { Route as EntitiesBooksRouteImport } from './routes/entities/books'
 
+const EntitiesRoute = EntitiesRouteImport.update({
+  id: '/entities',
+  path: '/entities',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EntitiesTvShowsRoute = EntitiesTvShowsRouteImport.update({
+  id: '/tv-shows',
+  path: '/tv-shows',
+  getParentRoute: () => EntitiesRoute,
+} as any)
+const EntitiesMoviesRoute = EntitiesMoviesRouteImport.update({
+  id: '/movies',
+  path: '/movies',
+  getParentRoute: () => EntitiesRoute,
+} as any)
+const EntitiesBooksRoute = EntitiesBooksRouteImport.update({
+  id: '/books',
+  path: '/books',
+  getParentRoute: () => EntitiesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/entities': typeof EntitiesRouteWithChildren
+  '/entities/books': typeof EntitiesBooksRoute
+  '/entities/movies': typeof EntitiesMoviesRoute
+  '/entities/tv-shows': typeof EntitiesTvShowsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/entities': typeof EntitiesRouteWithChildren
+  '/entities/books': typeof EntitiesBooksRoute
+  '/entities/movies': typeof EntitiesMoviesRoute
+  '/entities/tv-shows': typeof EntitiesTvShowsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/entities': typeof EntitiesRouteWithChildren
+  '/entities/books': typeof EntitiesBooksRoute
+  '/entities/movies': typeof EntitiesMoviesRoute
+  '/entities/tv-shows': typeof EntitiesTvShowsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/entities'
+    | '/entities/books'
+    | '/entities/movies'
+    | '/entities/tv-shows'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/entities'
+    | '/entities/books'
+    | '/entities/movies'
+    | '/entities/tv-shows'
+  id:
+    | '__root__'
+    | '/'
+    | '/entities'
+    | '/entities/books'
+    | '/entities/movies'
+    | '/entities/tv-shows'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EntitiesRoute: typeof EntitiesRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/entities': {
+      id: '/entities'
+      path: '/entities'
+      fullPath: '/entities'
+      preLoaderRoute: typeof EntitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +108,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/entities/tv-shows': {
+      id: '/entities/tv-shows'
+      path: '/tv-shows'
+      fullPath: '/entities/tv-shows'
+      preLoaderRoute: typeof EntitiesTvShowsRouteImport
+      parentRoute: typeof EntitiesRoute
+    }
+    '/entities/movies': {
+      id: '/entities/movies'
+      path: '/movies'
+      fullPath: '/entities/movies'
+      preLoaderRoute: typeof EntitiesMoviesRouteImport
+      parentRoute: typeof EntitiesRoute
+    }
+    '/entities/books': {
+      id: '/entities/books'
+      path: '/books'
+      fullPath: '/entities/books'
+      preLoaderRoute: typeof EntitiesBooksRouteImport
+      parentRoute: typeof EntitiesRoute
+    }
   }
 }
 
+interface EntitiesRouteChildren {
+  EntitiesBooksRoute: typeof EntitiesBooksRoute
+  EntitiesMoviesRoute: typeof EntitiesMoviesRoute
+  EntitiesTvShowsRoute: typeof EntitiesTvShowsRoute
+}
+
+const EntitiesRouteChildren: EntitiesRouteChildren = {
+  EntitiesBooksRoute: EntitiesBooksRoute,
+  EntitiesMoviesRoute: EntitiesMoviesRoute,
+  EntitiesTvShowsRoute: EntitiesTvShowsRoute,
+}
+
+const EntitiesRouteWithChildren = EntitiesRoute._addFileChildren(
+  EntitiesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EntitiesRoute: EntitiesRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

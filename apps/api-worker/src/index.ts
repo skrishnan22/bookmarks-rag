@@ -12,6 +12,7 @@ import type {
 import { bookmarksRouter } from "./routes/bookmarks.js";
 import { searchRouter } from "./routes/search.js";
 import { topicsRouter } from "./routes/topics.js";
+import { entitiesRouter } from "./routes/entities.js";
 import { createDb } from "./db/index.js";
 import { BookmarkRepository } from "./repositories/bookmarks.js";
 import { ChunkRepository } from "./repositories/chunks.js";
@@ -25,6 +26,9 @@ import { generateEmbeddings } from "./services/embedding.js";
 import { fetchAndConvertToMarkdown } from "./services/html-to-markdown.js";
 import { generateSummary } from "./services/summary.js";
 import { extractEntities } from "./services/entity-extraction.js";
+import { EntityEnrichmentService } from "./services/entity-enrichment.js";
+import { OpenLibraryProvider } from "./providers/openlibrary.js";
+import { TMDBProvider } from "./providers/tmdb.js";
 import { normalizeEntityName } from "./utils/normalize.js";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -69,6 +73,7 @@ app.get("/api/v1", (c) => {
 app.route("/api/v1/bookmarks", bookmarksRouter);
 app.route("/api/v1/search", searchRouter);
 app.route("/api/v1/topics", topicsRouter);
+app.route("/api/v1/entities", entitiesRouter);
 
 // 404 handler
 app.notFound((c) => {
@@ -338,6 +343,8 @@ export default {
       const limit = pLimit(2);
 
       try {
+        // Extract entities from all bookmarks in batch
+        const userIds = new Set<string>();
         await Promise.all(
           batch.messages.map((message) =>
             limit(async () => {
@@ -348,6 +355,7 @@ export default {
                   bookmarkRepo,
                   entityRepo
                 );
+                userIds.add((message.body as EntityExtractionMessage).userId);
                 message.ack();
               } catch (error) {
                 console.error(
@@ -359,6 +367,25 @@ export default {
             })
           )
         );
+
+        // Enrich pending entities for all users in this batch
+        const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
+        const openLibrary = new OpenLibraryProvider();
+        const tmdb = new TMDBProvider(env.TMDB_API_KEY);
+        const enrichmentService = new EntityEnrichmentService(
+          entityRepo,
+          openLibrary,
+          tmdb,
+          llmProvider
+        );
+
+        for (const userId of userIds) {
+          try {
+            await enrichmentService.enrichPendingEntities(userId);
+          } catch (error) {
+            console.error(`Failed to enrich entities for user ${userId}:`, error);
+          }
+        }
       } finally {
         await close();
       }

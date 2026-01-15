@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { BookmarkListItem } from "~/components/bookmarks/BookmarkListItem";
 import { EmptyState } from "~/components/bookmarks/EmptyState";
 import { LoadingState } from "~/components/bookmarks/LoadingState";
@@ -91,18 +92,30 @@ function Home() {
     !isInitialLoading && !isSearching && displayItems.length === 0;
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="relative pt-20 pb-12 px-4">
-        <div className="mx-auto max-w-3xl text-center space-y-6">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">
-            Your Bookmarks
-          </h1>
-          <p className="text-lg text-zinc-400 font-light max-w-xl mx-auto">
-            A curated collection of your reading list, resources, and
-            inspiration.
-          </p>
+    <div className="min-h-screen">
+      {/* Hero Section */}
+      <div className="relative pt-16 pb-12 px-4">
+        <div className="mx-auto max-w-2xl text-center space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-zinc-900 font-sans">
+              Your <span className="text-zinc-400">Archive</span>
+            </h1>
+          </motion.div>
 
-          <div className="max-w-xl mx-auto pt-4 relative z-10">
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            className="text-base font-medium text-zinc-500 max-w-md mx-auto"
+          >
+            A high-density collection of your resources and inspiration.
+          </motion.p>
+
+          <div className="max-w-xl mx-auto pt-4">
             <SearchBar
               ref={searchInputRef}
               value={query}
@@ -114,11 +127,10 @@ function Home() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-3xl px-4 pb-20">
+      {/* Main Content */}
+      <main className="mx-auto max-w-2xl px-4 pb-20">
         {isInitialLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
-          </div>
+          <LoadingState message="Loading your bookmarks..." />
         ) : isSearching ? (
           <LoadingState message="Searching..." />
         ) : showEmptyState ? (
@@ -131,17 +143,32 @@ function Home() {
             }
           />
         ) : (
-          <div className="space-y-4">
-            {displayItems.map((item) => (
-              <BookmarkListItem key={item.id} bookmark={item} />
+          <motion.div
+            className="space-y-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4 }}
+          >
+            {displayItems.map((item, index) => (
+              <BookmarkListItem key={item.id} bookmark={item} index={index} />
             ))}
-          </div>
+          </motion.div>
         )}
 
+        {/* Infinite scroll trigger */}
         {!isSearchMode && hasNextPage && !isInitialLoading && (
           <div ref={loadMoreRef} className="flex justify-center py-8">
             {isFetchingNextPage && (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-center gap-3 text-ink-400"
+              >
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-ink-100 border-t-accent" />
+                <span className="text-xs font-mono uppercase tracking-widest">
+                  Loading...
+                </span>
+              </motion.div>
             )}
           </div>
         )}

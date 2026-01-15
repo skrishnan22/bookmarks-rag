@@ -8,6 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { TabNavigation } from "~/components/layout/TabNavigation";
 
 const ONE_MINUTE_MS = 60 * 1000;
 
@@ -43,7 +44,12 @@ function RootComponent() {
   return (
     <RootDocument>
       <QueryClientProvider client={queryClient}>
-        <Outlet />
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
+          <TabNavigation />
+        </div>
+        <div className="pt-20">
+          <Outlet />
+        </div>
       </QueryClientProvider>
     </RootDocument>
   );
@@ -61,16 +67,12 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
           crossOrigin=""
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Fragment+Mono&family=Nunito:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
       </head>
       <body
-        className="bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-purple-500/30 selection:text-purple-200"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 50% 0%, rgba(120, 119, 198, 0.1) 0%, rgba(0, 0, 0, 0) 50%)",
-        }}
+        className="min-h-screen bg-zinc-50/50 text-zinc-900 antialiased selection:bg-amber-100 selection:text-amber-900"
         suppressHydrationWarning
       >
         {children}
