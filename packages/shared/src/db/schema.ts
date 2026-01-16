@@ -38,10 +38,12 @@ export const users = pgTable(
 );
 
 export const bookmarkStatusEnum = [
-  "PENDING",
-  "PROCESSING",
-  "DONE",
-  "FAILED",
+  "PENDING",        // Newly created, waiting for processing
+  "MARKDOWN_READY", // URL fetched, markdown stored
+  "CONTENT_READY",  // Summary generated, entity extraction triggered
+  "CHUNKS_READY",   // Chunks created and stored
+  "DONE",           // Embeddings complete
+  "FAILED",         // Processing failed
 ] as const;
 
 export type BookmarkStatus = (typeof bookmarkStatusEnum)[number];

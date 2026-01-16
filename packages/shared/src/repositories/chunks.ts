@@ -1,4 +1,4 @@
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, isNull, and } from "drizzle-orm";
 import type { Database } from "../db/index.js";
 import { chunks, type Chunk, type NewChunk } from "../db/schema.js";
 
@@ -106,6 +106,14 @@ export class ChunkRepository {
       .where(eq(chunks.bookmarkId, bookmarkId));
 
     return result.length;
+  }
+
+  async findChunksWithoutEmbeddings(bookmarkId: string): Promise<Chunk[]> {
+    return this.db
+      .select()
+      .from(chunks)
+      .where(and(eq(chunks.bookmarkId, bookmarkId), isNull(chunks.embedding)))
+      .orderBy(asc(chunks.position));
   }
 }
 

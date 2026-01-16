@@ -9,8 +9,13 @@ export interface User {
   updatedAt: Date;
 }
 
-// Bookmark types
-export type BookmarkStatus = "pending" | "processing" | "ready" | "failed";
+export type BookmarkStatus =
+  | "PENDING"
+  | "MARKDOWN_READY"
+  | "CONTENT_READY"
+  | "CHUNKS_READY"
+  | "DONE"
+  | "FAILED";
 
 export interface Bookmark {
   id: string;
