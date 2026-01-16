@@ -1,0 +1,27 @@
+name = "rag-bookmarks-ingestion"
+main = "src/index.ts"
+compatibility_date = "2024-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = 8788
+inspector_port = 9230
+
+[vars]
+ENVIRONMENT = "development"
+
+# Consume bookmark-ingestion queue
+[[queues.consumers]]
+queue = "bookmark-ingestion"
+max_batch_size = 10
+max_batch_timeout = 5
+
+# Produce to entity-extraction queue
+[[queues.producers]]
+queue = "entity-extraction"
+binding = "ENTITY_QUEUE"
+
+# Secrets (set via wrangler secret put):
+# - DATABASE_URL
+# - OPENROUTER_API_KEY  (LLM for summaries)
+# - JINA_API_KEY        (embeddings)
