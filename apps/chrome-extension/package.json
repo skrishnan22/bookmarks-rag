@@ -1,0 +1,18 @@
+{
+  "name": "@rag-bookmarks/chrome-extension",
+  "version": "1.0.0",
+  "description": "Chrome extension for RAG Bookmarks",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "clean": "rm -rf extn"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.10.7",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vite-plugin-static-copy": "^2.2.0"
+  }
+}
