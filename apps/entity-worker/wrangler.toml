@@ -1,0 +1,27 @@
+name = "rag-bookmarks-entity"
+main = "src/index.ts"
+compatibility_date = "2024-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = 8789
+inspector_port = 9231
+
+[vars]
+ENVIRONMENT = "development"
+
+# Consume entity queue (handles both extraction and enrichment messages)
+[[queues.consumers]]
+queue = "entity-extraction"
+max_batch_size = 5
+max_batch_timeout = 10
+
+# Producer binding to send enrichment messages back to same queue
+[[queues.producers]]
+queue = "entity-extraction"
+binding = "ENTITY_QUEUE"
+
+# Secrets (set via wrangler secret put):
+# - DATABASE_URL
+# - OPENROUTER_API_KEY  (LLM for entity extraction and disambiguation)
+# - TMDB_API_KEY        (movie/TV enrichment)
