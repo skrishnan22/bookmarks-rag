@@ -1,7 +1,8 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getBookmarks,
   searchBookmarks,
+  deleteBookmark,
   type Bookmark,
   type SearchResult,
 } from "~/lib/api";
@@ -48,6 +49,49 @@ export function flattenBookmarks(
 ): Bookmark[] {
   if (!pages) return [];
   return pages.flatMap((page) => page.bookmarks);
+}
+
+export function useDeleteBookmark() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteBookmark,
+    onMutate: async (id: string) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["bookmarks"] });
+      await queryClient.cancelQueries({ queryKey: ["search"] });
+
+      // Snapshot the previous value
+      const previousBookmarks = queryClient.getQueryData<{
+        pages: Array<{ bookmarks: Bookmark[]; nextOffset?: number }>;
+        pageParams: number[];
+      }>(["bookmarks"]);
+
+      // Optimistically remove from bookmarks list
+      if (previousBookmarks) {
+        queryClient.setQueryData(["bookmarks"], {
+          ...previousBookmarks,
+          pages: previousBookmarks.pages.map((page) => ({
+            ...page,
+            bookmarks: page.bookmarks.filter((b) => b.id !== id),
+          })),
+        });
+      }
+
+      return { previousBookmarks };
+    },
+    onError: (_err, _id, context) => {
+      // Rollback on error
+      if (context?.previousBookmarks) {
+        queryClient.setQueryData(["bookmarks"], context.previousBookmarks);
+      }
+    },
+    onSettled: () => {
+      // Invalidate to refetch
+      queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
 }
 
 export type { Bookmark, SearchResult };

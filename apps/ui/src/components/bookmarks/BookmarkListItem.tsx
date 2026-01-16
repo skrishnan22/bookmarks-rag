@@ -4,11 +4,20 @@ import {
   ImageIcon,
   MoreHorizontal,
   ArrowUpRight,
+  Trash2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "~/components/ui/dropdown-menu";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import { useDeleteBookmark } from "~/hooks/useBookmarks";
 
 interface BookmarkListItemProps {
   bookmark: {
@@ -29,6 +38,8 @@ export function BookmarkListItem({
   index = 0,
 }: BookmarkListItemProps) {
   const [faviconError, setFaviconError] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const deleteBookmark = useDeleteBookmark();
 
   const hostname = new URL(bookmark.url).hostname.replace(/^www\./, "");
 
@@ -110,14 +121,46 @@ export function BookmarkListItem({
         >
           <ArrowUpRight className="h-4 w-4" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-zinc-400 hover:text-zinc-900"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-zinc-400 hover:text-zinc-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDeleteConfirm(true);
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          deleteBookmark.mutate(bookmark.id, {
+            onSuccess: () => setShowDeleteConfirm(false),
+          });
+        }}
+        title="Delete bookmark"
+        description="Are you sure you want to delete this bookmark? This will also remove all associated data. This action cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        isLoading={deleteBookmark.isPending}
+      />
     </motion.div>
   );
 }

@@ -3,20 +3,36 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.2",
+    "@mozilla/readability": "^0.6.0",
+    "ai": "^6.0.5",
+    "drizzle-orm": "^0.45.1",
+    "gpt-tokenizer": "^3.4.0",
+    "linkedom": "^0.18.12",
+    "mdast-util-to-string": "^4.0.0",
+    "p-limit": "^7.2.0",
+    "postgres": "^3.4.7",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "turndown": "^7.2.2",
+    "unified": "^11.0.5",
     "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/turndown": "^5.0.6",
+    "typescript": "^5.7.3"
   }
 }

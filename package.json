@@ -6,6 +6,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
+    "dev:workers": "wrangler dev -c apps/api-worker/wrangler.toml -c apps/ingestion-worker/wrangler.toml -c apps/entity-worker/wrangler.toml --persist-to .wrangler/state",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "eslint . --ext .ts,.tsx",

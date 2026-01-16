@@ -28,6 +28,16 @@ export async function getBookmarks(
   return response.json();
 }
 
+export interface DeleteBookmarkResponse {
+  success: boolean;
+  error?: { code: string; message: string };
+}
+
+export async function deleteBookmark(id: string): Promise<DeleteBookmarkResponse> {
+  const response = await fetch(`/api/v1/bookmarks/${id}`, { method: "DELETE" });
+  return response.json();
+}
+
 export interface SearchResult {
   bookmarkId: string;
   title: string | null;
