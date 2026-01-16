@@ -1,6 +1,5 @@
 import { z } from "zod";
-import type { LLMProvider } from "../providers/types.js";
-import type { EntityType } from "../db/schema.js";
+import type { LLMProvider, EntityType } from "@rag-bookmarks/shared";
 
 const MAX_INPUT_CHARS = 48000;
 const MIN_CONFIDENCE = 0.5;

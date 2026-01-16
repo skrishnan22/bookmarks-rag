@@ -1,13 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import type { Env, ClusteringMessage } from "../types.js";
-import { createDb } from "../db/index.js";
+import { createDb, BookmarkRepository } from "@rag-bookmarks/shared";
+import type { Env } from "../types.js";
 import {
   TopicRepository,
   BookmarkTopicRepository,
 } from "../repositories/topics.js";
-import { BookmarkRepository } from "../repositories/bookmarks.js";
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -230,41 +229,42 @@ topicsRouter.put("/:id", zValidator("json", updateTopicSchema), async (c) => {
   }
 });
 
-topicsRouter.post("/recluster", async (c) => {
-  const { db } = createDb(c.env.DATABASE_URL);
-  const bookmarkRepo = new BookmarkRepository(db);
-  const userId = TEST_USER_ID;
-
-  try {
-    const bookmarkCount =
-      await bookmarkRepo.countWithTopicEmbeddingByUserId(userId);
-
-    await c.env.CLUSTERING_QUEUE.send({
-      userId,
-      reason: "manual_trigger",
-      bookmarkCount,
-    } satisfies ClusteringMessage);
-
-    return c.json({
-      success: true,
-      data: {
-        message: "Clustering job enqueued",
-        bookmarkCount,
-      },
-    });
-  } catch (error) {
-    console.error("Error enqueuing recluster:", error);
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: "INTERNAL_ERROR",
-          message: "Failed to enqueue clustering",
-        },
-      },
-      500
-    );
-  }
-});
+// TODO: Re-enable when clustering worker is implemented
+// topicsRouter.post("/recluster", async (c) => {
+//   const { db } = createDb(c.env.DATABASE_URL);
+//   const bookmarkRepo = new BookmarkRepository(db);
+//   const userId = TEST_USER_ID;
+//
+//   try {
+//     const bookmarkCount =
+//       await bookmarkRepo.countWithTopicEmbeddingByUserId(userId);
+//
+//     await c.env.CLUSTERING_QUEUE.send({
+//       userId,
+//       reason: "manual_trigger",
+//       bookmarkCount,
+//     });
+//
+//     return c.json({
+//       success: true,
+//       data: {
+//         message: "Clustering job enqueued",
+//         bookmarkCount,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error enqueuing recluster:", error);
+//     return c.json(
+//       {
+//         success: false,
+//         error: {
+//           code: "INTERNAL_ERROR",
+//           message: "Failed to enqueue clustering",
+//         },
+//       },
+//       500
+//     );
+//   }
+// });
 
 export { topicsRouter };

@@ -3,7 +3,7 @@ import {
   chunkMarkdown,
   countTokens,
   DEFAULT_CHUNKING_CONFIG,
-} from "./chunking";
+} from "@rag-bookmarks/shared";
 
 const LARGE_PARAGRAPH_WORD_COUNT = 200;
 const VERY_LARGE_PARAGRAPH_WORD_COUNT = 100;

@@ -1,12 +1,12 @@
 import type {
   EmbeddingProvider,
   RerankerProvider,
-} from "../providers/types.js";
+  BookmarkRepository,
+} from "@rag-bookmarks/shared";
 import type {
   SearchRepository,
   HybridSearchResult,
 } from "../repositories/search.js";
-import type { BookmarkRepository } from "../repositories/bookmarks.js";
 
 export interface SearchOptions {
   query: string;
@@ -44,13 +44,30 @@ export async function search(
   const topN = options.topN ?? DEFAULT_TOP_N;
   const rerankerThreshold = options.threshold ?? DEFAULT_RERANKER_THRESHOLD;
 
+  const embeddingStart = performance.now();
   const queryEmbedding = await embeddingProvider.embed(query);
-  console.log(JSON.stringify(queryEmbedding));
+  const embeddingDuration = performance.now() - embeddingStart;
+  console.log(
+    JSON.stringify({
+      step: "query_embedding",
+      duration_ms: embeddingDuration,
+    })
+  );
+
+  const hybridSearchStart = performance.now();
   const hybridResults = await searchRepo.hybridSearch(
     userId,
     queryEmbedding,
     query,
     topK
+  );
+  const hybridSearchDuration = performance.now() - hybridSearchStart;
+  console.log(
+    JSON.stringify({
+      step: "hybrid_search",
+      duration_ms: hybridSearchDuration,
+      results_count: hybridResults.length,
+    })
   );
 
   if (hybridResults.length === 0) {
@@ -62,11 +79,20 @@ export async function search(
 
   if (rerankerProvider) {
     try {
+      const rerankStart = performance.now();
       rankedResults = await rerankResults(
         query,
         hybridResults,
         rerankerProvider,
         topN
+      );
+      const rerankDuration = performance.now() - rerankStart;
+      console.log(
+        JSON.stringify({
+          step: "rerank",
+          duration_ms: rerankDuration,
+          results_count: rankedResults.length,
+        })
       );
       useRerankerScores = true;
     } catch (error) {
@@ -83,13 +109,25 @@ export async function search(
     }));
   }
 
-  // Only apply threshold to reranker scores (0-1 range).
-  // RRF scores are rank-based (~0.01-0.03 range) and should not be thresholded.
   const filteredResults = useRerankerScores
     ? rankedResults.filter((r) => r.finalScore >= rerankerThreshold)
     : rankedResults;
 
-  return enrichWithBookmarkMetadata(filteredResults, bookmarkRepo);
+  const enrichmentStart = performance.now();
+  const finalResults = await enrichWithBookmarkMetadata(
+    filteredResults,
+    bookmarkRepo
+  );
+  const enrichmentDuration = performance.now() - enrichmentStart;
+  console.log(
+    JSON.stringify({
+      step: "metadata_enrichment",
+      duration_ms: enrichmentDuration,
+      results_count: finalResults.length,
+    })
+  );
+
+  return finalResults;
 }
 
 async function rerankResults(

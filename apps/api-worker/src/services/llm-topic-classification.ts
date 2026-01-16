@@ -1,4 +1,4 @@
-import type { LLMProvider } from "../providers/index.js";
+import type { LLMProvider } from "@rag-bookmarks/shared";
 
 /**
  * Minimal bookmark data needed for classification

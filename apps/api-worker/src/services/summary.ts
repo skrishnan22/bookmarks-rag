@@ -1,4 +1,4 @@
-import type { LLMProvider } from "../providers/types.js";
+import type { LLMProvider } from "@rag-bookmarks/shared";
 
 const MAX_INPUT_CHARS = 16000;
 

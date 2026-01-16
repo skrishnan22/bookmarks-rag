@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { createBookmarkSchema } from "@rag-bookmarks/shared";
+import {
+  createBookmarkSchema,
+  createDb,
+  BookmarkRepository,
+} from "@rag-bookmarks/shared";
 import type { Env, BookmarkIngestionMessage } from "../types.js";
-import { createDb } from "../db/index.js";
-import { BookmarkRepository } from "../repositories/bookmarks.js";
 
 const listBookmarksSchema = z.object({
   limit: z.coerce.number().min(1).max(100).optional().default(20),
@@ -176,5 +178,52 @@ bookmarksRouter.get(
     }
   }
 );
+
+/**
+ * DELETE /api/v1/bookmarks/:id
+ *
+ * Delete a bookmark by ID.
+ * Cascade deletes will remove associated chunks, entity_bookmarks, and bookmark_topics.
+ *
+ * Response:
+ *   200: { success: true }
+ *   404: Bookmark not found or doesn't belong to user
+ *   500: Server error
+ */
+bookmarksRouter.delete("/:id", async (c) => {
+  const { id } = c.req.param();
+  const { db } = createDb(c.env.DATABASE_URL);
+  const bookmarkRepo = new BookmarkRepository(db);
+
+  // TODO: Get userId from auth context when implemented
+  const userId = TEST_USER_ID;
+
+  try {
+    const deleted = await bookmarkRepo.delete(id, userId);
+
+    if (!deleted) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "NOT_FOUND", message: "Bookmark not found" },
+        },
+        404
+      );
+    }
+
+    console.log(`Bookmark ${id} deleted`);
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting bookmark:", error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "INTERNAL_ERROR", message: "Failed to delete bookmark" },
+      },
+      500
+    );
+  }
+});
 
 export { bookmarksRouter };

@@ -10,24 +10,14 @@ export interface Env {
   JWT_SECRET: string;
   TMDB_API_KEY: string;
 
-  // Queue bindings
+  // Queue bindings (producer only)
   INGESTION_QUEUE: Queue<BookmarkIngestionMessage>;
-  ENTITY_QUEUE: Queue<EntityExtractionMessage>;
 }
 
 // Queue message types
 export interface BookmarkIngestionMessage {
   bookmarkId: string;
   url: string;
-  userId: string;
-}
-
-export interface EntityExtractionMessage {
-  bookmarkId: string;
-  userId: string;
-}
-
-export interface ClusteringMessage {
   userId: string;
 }
 

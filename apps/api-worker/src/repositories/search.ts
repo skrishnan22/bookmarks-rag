@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Database } from "../db/index.js";
+import type { Database } from "@rag-bookmarks/shared";
 
 export interface HybridSearchResult {
   chunkId: string;

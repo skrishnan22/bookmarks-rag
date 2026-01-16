@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import {
+  createDb,
+  EntityRepository,
+  entityTypeEnum,
+} from "@rag-bookmarks/shared";
 import type { Env } from "../types.js";
-import { createDb } from "../db/index.js";
-import { EntityRepository } from "../repositories/entities.js";
-import { entityTypeEnum } from "../db/schema.js";
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 

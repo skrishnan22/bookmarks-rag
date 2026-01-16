@@ -1,13 +1,13 @@
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import type { Database } from "../db/index.js";
 import {
+  type Database,
   topics,
   bookmarkTopics,
   bookmarks,
   type Topic,
   type NewTopic,
   type BookmarkTopic,
-} from "../db/schema.js";
+} from "@rag-bookmarks/shared";
 
 export interface CreateTopicParams {
   userId: string;
@@ -242,7 +242,6 @@ export class BookmarkTopicRepository {
         id: string;
         title: string | null;
         url: string;
-        topicEmbedding: number[] | null;
       };
       score: number;
     }>
@@ -253,7 +252,6 @@ export class BookmarkTopicRepository {
           id: bookmarks.id,
           title: bookmarks.title,
           url: bookmarks.url,
-          topicEmbedding: bookmarks.topicEmbedding,
         },
         score: bookmarkTopics.score,
       })

@@ -1,9 +1,15 @@
 import { z } from "zod";
-import type { Entity, EntityMetadata } from "../db/schema.js";
-import type { EntityRepository } from "../repositories/entities.js";
-import type { LLMProvider } from "../providers/types.js";
-import type { OpenLibraryProvider, BookCandidate } from "../providers/openlibrary.js";
-import type { TMDBProvider, MovieCandidate, TvShowCandidate } from "../providers/tmdb.js";
+import type {
+  Entity,
+  EntityMetadata,
+  EntityRepository,
+  LLMProvider,
+  OpenLibraryProvider,
+  BookCandidate,
+  TMDBProvider,
+  MovieCandidate,
+  TvShowCandidate,
+} from "@rag-bookmarks/shared";
 
 const DISAMBIGUATION_THRESHOLD = 0.8; // If top candidate has popularity/score < this, disambiguate
 const MIN_CONFIDENCE_THRESHOLD = 0.6; // Minimum LLM confidence to accept disambiguation
