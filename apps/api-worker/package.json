@@ -15,31 +15,19 @@
     "db:seed": "tsx --env-file=.env src/db/seed.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.2",
     "@hono/zod-validator": "^0.7.6",
-    "@mozilla/readability": "^0.6.0",
     "@rag-bookmarks/shared": "workspace:*",
-    "ai": "^6.0.5",
     "drizzle-orm": "^0.45.1",
-    "gpt-tokenizer": "^3.4.0",
     "hono": "^4.1.0",
-    "linkedom": "^0.18.12",
-    "mdast-util-to-string": "^4.0.0",
-    "p-limit": "^7.2.0",
     "postgres": "^3.4.7",
-    "remark-gfm": "^4.0.1",
-    "remark-parse": "^11.0.0",
-    "turndown": "^7.2.2",
-    "unified": "^11.0.5",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240222.0",
-    "@types/mdast": "^4.0.4",
     "@types/node": "^25.0.3",
-    "@types/turndown": "^5.0.6",
     "drizzle-kit": "^0.31.8",
     "tsx": "^4.21.0",
+    "typescript": "^5.7.3",
     "wrangler": "^4.54.0"
   }
 }

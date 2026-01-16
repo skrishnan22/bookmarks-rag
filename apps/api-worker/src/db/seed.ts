@@ -4,7 +4,7 @@
  */
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { users } from "./schema.js";
+import { users } from "@rag-bookmarks/shared";
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
