@@ -12,6 +12,7 @@ import {
   jsonb,
   real,
   primaryKey,
+  boolean,
 } from "drizzle-orm/pg-core";
 
 const tsvector = customType<{ data: string }>({
@@ -64,6 +65,7 @@ export const bookmarks = pgTable(
     markdown: text("markdown"),
     status: text("status").$type<BookmarkStatus>().default("PENDING").notNull(),
     errorMessage: text("error_message"),
+    entitiesExtracted: boolean("entities_extracted").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -170,11 +172,25 @@ export type EntityType = (typeof entityTypeEnum)[number];
 
 export const entityStatusEnum = [
   "pending",
+  "candidates_found",
   "enriched",
   "ambiguous",
   "failed",
 ] as const;
 export type EntityStatus = (typeof entityStatusEnum)[number];
+
+export interface SearchCandidate {
+  externalId: string;
+  title: string;
+  confidence: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface SearchCandidates {
+  provider: "openlibrary" | "tmdb";
+  searchedAt: string;
+  results: SearchCandidate[];
+}
 
 export interface BookMetadata {
   canonical_title?: string;
@@ -242,6 +258,7 @@ export const entities = pgTable(
     externalId: text("external_id"),
     status: text("status").$type<EntityStatus>().default("pending").notNull(),
     metadata: jsonb("metadata").$type<EntityMetadata>(),
+    searchCandidates: jsonb("search_candidates").$type<SearchCandidates>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

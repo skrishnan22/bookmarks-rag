@@ -2,7 +2,7 @@ import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
   // Schema location
-  schema: "./src/db/schema.ts",
+  schema: "../../packages/shared/src/db/schema.ts",
 
   // Output directory for migrations (when using generate)
   out: "./drizzle",

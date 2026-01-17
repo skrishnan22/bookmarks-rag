@@ -5,6 +5,8 @@ import type {
   EntityMetadata,
   AmbiguousMetadata,
   FailedMetadata,
+  SearchCandidates,
+  SearchCandidate,
 } from "../db/schema.js";
 import type { EntityRepository } from "../repositories/entities.js";
 import type { LLMProvider } from "../providers/types.js";
@@ -30,6 +32,22 @@ interface EnrichmentCandidate {
   candidates: Candidate[];
 }
 
+function candidateToSearchCandidate(candidate: Candidate): SearchCandidate {
+  return {
+    externalId: candidate.externalId,
+    title: candidate.title,
+    confidence: "popularity" in candidate ? candidate.popularity / 100 : 0.5,
+    metadata: candidate as unknown as Record<string, unknown>,
+  };
+}
+
+function searchCandidateToCandidate(
+  sc: SearchCandidate,
+  entityType: string
+): Candidate {
+  return sc.metadata as Candidate;
+}
+
 const disambiguationDecisionSchema = z.object({
   entityId: z.string(),
   selectedExternalId: z.string().nullable(),
@@ -50,53 +68,54 @@ export class EntityEnrichmentService {
   ) {}
 
   async enrichPendingEntities(userId: string): Promise<void> {
-    const pendingEntities = await this.entityRepo.findPendingByUser(userId);
+    const limit = pLimit(API_CONCURRENCY);
 
-    if (pendingEntities.length === 0) {
-      console.log(`No pending entities for user ${userId}`);
+    // Phase 1: Search APIs for pending entities and store candidates
+    const pendingEntities = await this.entityRepo.findByStatus(
+      userId,
+      "pending"
+    );
+
+    if (pendingEntities.length > 0) {
+      console.log(
+        `[Phase 1] Searching APIs for ${pendingEntities.length} pending entities`
+      );
+      await this.searchAndStoreCandidates(pendingEntities, limit);
+    }
+
+    // Phase 2: Process all entities with stored candidates
+    const entitiesWithCandidates = await this.entityRepo.findByStatus(
+      userId,
+      "candidates_found"
+    );
+
+    if (entitiesWithCandidates.length === 0) {
+      console.log(`No entities with candidates to process for user ${userId}`);
       return;
     }
 
     console.log(
-      `Enriching ${pendingEntities.length} pending entities for user ${userId}`
+      `[Phase 2] Processing ${entitiesWithCandidates.length} entities with candidates`
     );
 
-    const limit = pLimit(API_CONCURRENCY);
+    // Build enrichment candidates from stored data
+    const enrichmentCandidates: EnrichmentCandidate[] = [];
+    for (const entity of entitiesWithCandidates) {
+      if (!entity.searchCandidates?.results) {
+        console.warn(`Entity ${entity.id} has no stored candidates, skipping`);
+        await this.markAsFailed(entity, "No stored candidates found");
+        continue;
+      }
 
-    // Build tasks for all entities - will run in parallel with concurrency limit
-    const candidateTasks = pendingEntities.map((entity) =>
-      limit(async (): Promise<EnrichmentCandidate | null> => {
-        try {
-          let candidates: Candidate[];
-
-          if (entity.type === "book") {
-            candidates = await this.openLibrary.searchBooks(entity.name);
-          } else if (entity.type === "movie") {
-            candidates = await this.tmdb.searchMovies(entity.name);
-          } else {
-            candidates = await this.tmdb.searchTvShows(entity.name);
-          }
-
-          return { entity, candidates };
-        } catch (error) {
-          console.error(
-            `Failed to fetch candidates for ${entity.type} "${entity.name}":`,
-            error
-          );
-          await this.markAsFailed(entity, String(error));
-          return null;
-        }
-      })
-    );
-
-    const results = await Promise.all(candidateTasks);
-    const enrichmentCandidates = results.filter(
-      (r): r is EnrichmentCandidate => r !== null
-    );
+      const candidates = entity.searchCandidates.results.map((sc) =>
+        searchCandidateToCandidate(sc, entity.type)
+      );
+      enrichmentCandidates.push({ entity, candidates });
+    }
 
     const clearMatches: Array<{
       entity: Entity;
-      candidate: BookCandidate | MovieCandidate | TvShowCandidate;
+      candidate: Candidate;
     }> = [];
     const ambiguousCandidates: EnrichmentCandidate[] = [];
 
@@ -149,6 +168,56 @@ export class EntityEnrichmentService {
     console.log(
       `Enrichment complete: ${clearMatches.length} clear, ${ambiguousCandidates.length} disambiguated`
     );
+  }
+
+  private async searchAndStoreCandidates(
+    entities: Entity[],
+    limit: ReturnType<typeof pLimit>
+  ): Promise<void> {
+    const tasks = entities.map((entity) =>
+      limit(async () => {
+        try {
+          let candidates: Candidate[];
+          let provider: "openlibrary" | "tmdb";
+
+          if (entity.type === "book") {
+            candidates = await this.openLibrary.searchBooks(entity.name);
+            provider = "openlibrary";
+          } else if (entity.type === "movie") {
+            candidates = await this.tmdb.searchMovies(entity.name);
+            provider = "tmdb";
+          } else {
+            candidates = await this.tmdb.searchTvShows(entity.name);
+            provider = "tmdb";
+          }
+
+          // Store candidates on entity
+          const searchCandidates: SearchCandidates = {
+            provider,
+            searchedAt: new Date().toISOString(),
+            results: candidates.map(candidateToSearchCandidate),
+          };
+
+          await this.entityRepo.updateSearchCandidates(
+            entity.id,
+            searchCandidates
+          );
+          await this.entityRepo.updateStatus(entity.id, "candidates_found");
+
+          console.log(
+            `[search] Entity "${entity.name}": Found ${candidates.length} candidates`
+          );
+        } catch (error) {
+          console.error(
+            `Failed to fetch candidates for ${entity.type} "${entity.name}":`,
+            error
+          );
+          await this.markAsFailed(entity, String(error));
+        }
+      })
+    );
+
+    await Promise.all(tasks);
   }
 
   private sortCandidatesByRelevance(candidates: Candidate[]): Candidate[] {

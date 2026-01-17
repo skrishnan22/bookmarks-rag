@@ -41,6 +41,14 @@ async function handleEntityExtraction(
     return false;
   }
 
+  // Skip if entities already extracted for this bookmark
+  if (bookmark.entitiesExtracted) {
+    console.log(
+      `[extraction] Bookmark ${bookmarkId}: Already extracted, skipping`
+    );
+    return false;
+  }
+
   const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
 
   const extracted = await extractEntities(
@@ -52,6 +60,8 @@ async function handleEntityExtraction(
 
   if (extracted.length === 0) {
     console.log(`[extraction] Bookmark ${bookmarkId}: No entities found`);
+    // Mark as extracted even if no entities found (to avoid re-processing)
+    await bookmarkRepo.setEntitiesExtracted(bookmarkId, true);
     return false;
   }
 
@@ -101,6 +111,9 @@ async function handleEntityExtraction(
       createdNewEntities = true;
     }
   }
+
+  // Mark extraction complete AFTER all entities are stored
+  await bookmarkRepo.setEntitiesExtracted(bookmarkId, true);
 
   console.log(`[extraction] Bookmark ${bookmarkId}: Complete`);
   return createdNewEntities;

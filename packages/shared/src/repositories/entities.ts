@@ -10,6 +10,7 @@ import {
   type EntityMetadata,
   type EntityBookmark,
   type Bookmark,
+  type SearchCandidates,
 } from "../db/schema.js";
 
 export interface CreateEntityParams {
@@ -247,6 +248,36 @@ export class EntityRepository {
 
     return result[0]?.count ?? 0;
   }
+
+  async updateSearchCandidates(
+    id: string,
+    candidates: SearchCandidates
+  ): Promise<void> {
+    await this.db
+      .update(entities)
+      .set({
+        searchCandidates: candidates,
+        updatedAt: new Date(),
+      })
+      .where(eq(entities.id, id));
+  }
+
+  async updateStatus(id: string, status: EntityStatus): Promise<void> {
+    await this.db
+      .update(entities)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(entities.id, id));
+  }
+
+  async findByStatus(userId: string, status: EntityStatus): Promise<Entity[]> {
+    return this.db
+      .select()
+      .from(entities)
+      .where(and(eq(entities.userId, userId), eq(entities.status, status)));
+  }
 }
 
 export type {
@@ -255,4 +286,5 @@ export type {
   EntityStatus,
   EntityMetadata,
   EntityBookmark,
+  SearchCandidates,
 };

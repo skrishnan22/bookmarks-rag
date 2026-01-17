@@ -17,6 +17,7 @@ export interface UpdateBookmarkParams {
   markdown?: string;
   status?: BookmarkStatus;
   errorMessage?: string;
+  entitiesExtracted?: boolean;
 }
 
 export class BookmarkRepository {
@@ -110,6 +111,16 @@ export class BookmarkRepository {
       .returning({ id: bookmarks.id });
 
     return result.length > 0;
+  }
+
+  async setEntitiesExtracted(id: string, extracted: boolean): Promise<void> {
+    await this.db
+      .update(bookmarks)
+      .set({
+        entitiesExtracted: extracted,
+        updatedAt: new Date(),
+      })
+      .where(eq(bookmarks.id, id));
   }
 }
 
