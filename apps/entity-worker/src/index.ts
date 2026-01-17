@@ -11,7 +11,7 @@ import {
   BookmarkRepository,
   EntityRepository,
   createLLMProvider,
-  extractEntities,
+  extractSummaryAndEntities,
   normalizeEntityName,
   EntityEnrichmentService,
   OpenLibraryProvider,
@@ -42,12 +42,18 @@ async function handleEntityExtraction(
 
   const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
 
-  const extracted = await extractEntities(
+  const { summary, entities: extracted } = await extractSummaryAndEntities(
     bookmark.markdown,
     bookmark.title ?? "",
     bookmark.url,
     llmProvider
   );
+
+  // Update bookmark with summary (even if no entities found)
+  if (summary) {
+    await bookmarkRepo.update({ id: bookmarkId, summary });
+    console.log(`[extraction] Bookmark ${bookmarkId}: Summary updated`);
+  }
 
   if (extracted.length === 0) {
     console.log(`[extraction] Bookmark ${bookmarkId}: No entities found`);

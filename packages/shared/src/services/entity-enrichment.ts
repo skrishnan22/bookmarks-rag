@@ -55,7 +55,7 @@ function searchCandidateToCandidate(
   sc: SearchCandidate,
   entityType: string
 ): Candidate {
-  return sc.metadata as Candidate;
+  return sc.metadata as unknown as Candidate;
 }
 
 const disambiguationDecisionSchema = z.object({
