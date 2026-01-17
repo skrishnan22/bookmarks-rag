@@ -15,7 +15,6 @@ const extractionResponseSchema = z.object({
   entities: z.array(extractedEntitySchema),
 });
 
-// Derive type from schema - avoids manual type definition drifting from schema
 export type ExtractedEntity = z.infer<typeof extractedEntitySchema>;
 
 const SYSTEM_PROMPT = `You are an entity extraction assistant. Extract books, movies, and TV shows mentioned in the provided content.
@@ -84,7 +83,7 @@ export async function extractEntities(
       { role: "user", content: buildUserPrompt(title, markdown, url) },
     ],
     extractionResponseSchema,
-    { temperature: 0.1, maxTokens: 2000 }
+    { temperature: 0.1, maxTokens: 2000 } //TODO=>move to constants.
   );
 
   const filtered = result.entities.filter(

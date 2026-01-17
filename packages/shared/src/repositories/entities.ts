@@ -62,7 +62,7 @@ export class EntityRepository {
         name: params.name,
         normalizedName: params.normalizedName,
         externalId: params.externalId,
-        status: params.status ?? "pending",
+        status: params.status ?? "PENDING",
         metadata: params.metadata,
       })
       .returning();
@@ -147,7 +147,7 @@ export class EntityRepository {
     return this.db
       .select()
       .from(entities)
-      .where(and(eq(entities.userId, userId), eq(entities.status, "pending")));
+      .where(and(eq(entities.userId, userId), eq(entities.status, "PENDING")));
   }
 
   async findByIds(ids: string[]): Promise<Entity[]> {
@@ -277,6 +277,25 @@ export class EntityRepository {
       .select()
       .from(entities)
       .where(and(eq(entities.userId, userId), eq(entities.status, status)));
+  }
+
+  async findPendingEntitiesForBookmark(
+    userId: string,
+    bookmarkId: string
+  ): Promise<Entity[]> {
+    const result = await this.db
+      .select({ entity: entities })
+      .from(entities)
+      .innerJoin(entityBookmarks, eq(entities.id, entityBookmarks.entityId))
+      .where(
+        and(
+          eq(entityBookmarks.bookmarkId, bookmarkId),
+          eq(entities.userId, userId),
+          inArray(entities.status, ["PENDING", "CANDIDATES_FOUND"])
+        )
+      );
+
+    return result.map((r) => r.entity);
   }
 }
 

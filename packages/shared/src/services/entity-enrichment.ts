@@ -32,6 +32,16 @@ interface EnrichmentCandidate {
   candidates: Candidate[];
 }
 
+interface ClearMatch {
+  entity: Entity;
+  candidate: Candidate;
+}
+
+interface CategorizedMatches {
+  clearMatches: ClearMatch[];
+  ambiguous: EnrichmentCandidate[];
+}
+
 function candidateToSearchCandidate(candidate: Candidate): SearchCandidate {
   return {
     externalId: candidate.externalId,
@@ -67,39 +77,120 @@ export class EntityEnrichmentService {
     private llmProvider: LLMProvider
   ) {}
 
-  async enrichPendingEntities(userId: string): Promise<void> {
-    const limit = pLimit(API_CONCURRENCY);
+  async enrichEntitiesForBookmark(
+    userId: string,
+    bookmarkId: string
+  ): Promise<void> {
+    const entitiesToProcess =
+      await this.entityRepo.findPendingEntitiesForBookmark(userId, bookmarkId);
 
-    // Phase 1: Search APIs for pending entities and store candidates
+    if (entitiesToProcess.length === 0) {
+      console.log(
+        `[enrichment] Bookmark ${bookmarkId}: No PENDING entities to enrich`
+      );
+      return;
+    }
+
+    console.log(
+      `[enrichment] Bookmark ${bookmarkId}: Processing ${entitiesToProcess.length} entities`
+    );
+
+    await this.enrichEntities(entitiesToProcess);
+  }
+
+  async enrichPendingEntities(userId: string): Promise<void> {
     const pendingEntities = await this.entityRepo.findByStatus(
       userId,
-      "pending"
+      "PENDING"
     );
+    const candidatesFoundEntities = await this.entityRepo.findByStatus(
+      userId,
+      "CANDIDATES_FOUND"
+    );
+
+    const entitiesToProcess = [...pendingEntities, ...candidatesFoundEntities];
+
+    if (entitiesToProcess.length === 0) {
+      console.log(`No entities to process for user ${userId}`);
+      return;
+    }
+
+    console.log(
+      `[enrichment] User ${userId}: Processing ${entitiesToProcess.length} entities`
+    );
+
+    await this.enrichEntities(entitiesToProcess);
+  }
+
+  private async enrichEntities(entitiesToProcess: Entity[]): Promise<void> {
+    const limit = pLimit(API_CONCURRENCY);
+
+    const enrichmentCandidates = await this.buildEnrichmentCandidates(
+      entitiesToProcess,
+      limit
+    );
+
+    if (enrichmentCandidates.length === 0) {
+      console.log(`No entities with candidates to process`);
+      return;
+    }
+
+    console.log(
+      `[Phase 2] Processing ${enrichmentCandidates.length} entities with candidates`
+    );
+
+    const { clearMatches, ambiguous } =
+      await this.categorizeMatches(enrichmentCandidates);
+
+    await this.processClearMatches(clearMatches, limit);
+
+    if (ambiguous.length > 0) {
+      await this.disambiguateEntities(ambiguous, limit);
+    }
+
+    console.log(
+      `Enrichment complete: ${clearMatches.length} clear, ${ambiguous.length} disambiguated`
+    );
+  }
+
+  private async buildEnrichmentCandidates(
+    entitiesToProcess: Entity[],
+    limit: ReturnType<typeof pLimit>
+  ): Promise<EnrichmentCandidate[]> {
+    const pendingEntities = entitiesToProcess.filter(
+      (e) => e.status === "PENDING"
+    );
+    const entitiesWithCandidates = entitiesToProcess.filter(
+      (e) => e.status === "CANDIDATES_FOUND"
+    );
+
+    const candidatesMap = new Map<string, Candidate[]>();
 
     if (pendingEntities.length > 0) {
       console.log(
         `[Phase 1] Searching APIs for ${pendingEntities.length} pending entities`
       );
-      await this.searchAndStoreCandidates(pendingEntities, limit);
+      const searchResults = await this.searchAndStoreCandidates(
+        pendingEntities,
+        limit
+      );
+
+      for (const [entityId, candidates] of searchResults) {
+        candidatesMap.set(entityId, candidates);
+      }
     }
 
-    // Phase 2: Process all entities with stored candidates
-    const entitiesWithCandidates = await this.entityRepo.findByStatus(
-      userId,
-      "candidates_found"
-    );
-
-    if (entitiesWithCandidates.length === 0) {
-      console.log(`No entities with candidates to process for user ${userId}`);
-      return;
-    }
-
-    console.log(
-      `[Phase 2] Processing ${entitiesWithCandidates.length} entities with candidates`
-    );
-
-    // Build enrichment candidates from stored data
     const enrichmentCandidates: EnrichmentCandidate[] = [];
+
+    // Add pending entities that got candidates from API search
+    for (const entity of pendingEntities) {
+      const candidates = candidatesMap.get(entity.id);
+      if (candidates) {
+        enrichmentCandidates.push({ entity, candidates });
+      }
+    }
+
+    // Add entities that already had CANDIDATES_FOUND status (from previous runs)
     for (const entity of entitiesWithCandidates) {
       if (!entity.searchCandidates?.results) {
         console.warn(`Entity ${entity.id} has no stored candidates, skipping`);
@@ -113,11 +204,14 @@ export class EntityEnrichmentService {
       enrichmentCandidates.push({ entity, candidates });
     }
 
-    const clearMatches: Array<{
-      entity: Entity;
-      candidate: Candidate;
-    }> = [];
-    const ambiguousCandidates: EnrichmentCandidate[] = [];
+    return enrichmentCandidates;
+  }
+
+  private async categorizeMatches(
+    enrichmentCandidates: EnrichmentCandidate[]
+  ): Promise<CategorizedMatches> {
+    const clearMatches: ClearMatch[] = [];
+    const ambiguous: EnrichmentCandidate[] = [];
 
     for (const enrichmentCandidate of enrichmentCandidates) {
       const { entity, candidates } = enrichmentCandidate;
@@ -136,6 +230,7 @@ export class EntityEnrichmentService {
       const topCandidate = sorted[0]!;
       const secondCandidate = sorted[1];
 
+      // For movies/tv, use popularity ratio to determine clear match
       const isMovieOrTv = entity.type === "movie" || entity.type === "tv_show";
       if (
         isMovieOrTv &&
@@ -151,29 +246,29 @@ export class EntityEnrichmentService {
         }
       }
 
-      ambiguousCandidates.push(enrichmentCandidate);
+      ambiguous.push(enrichmentCandidate);
     }
 
-    // Enrich clear matches in parallel
+    return { clearMatches, ambiguous };
+  }
+
+  private async processClearMatches(
+    clearMatches: ClearMatch[],
+    limit: ReturnType<typeof pLimit>
+  ): Promise<void> {
     await Promise.all(
       clearMatches.map(({ entity, candidate }) =>
         limit(() => this.enrichEntity(entity, candidate))
       )
-    );
-
-    if (ambiguousCandidates.length > 0) {
-      await this.disambiguateEntities(ambiguousCandidates, limit);
-    }
-
-    console.log(
-      `Enrichment complete: ${clearMatches.length} clear, ${ambiguousCandidates.length} disambiguated`
     );
   }
 
   private async searchAndStoreCandidates(
     entities: Entity[],
     limit: ReturnType<typeof pLimit>
-  ): Promise<void> {
+  ): Promise<Map<string, Candidate[]>> {
+    const resultsMap = new Map<string, Candidate[]>();
+
     const tasks = entities.map((entity) =>
       limit(async () => {
         try {
@@ -191,7 +286,7 @@ export class EntityEnrichmentService {
             provider = "tmdb";
           }
 
-          // Store candidates on entity
+          // Store candidates on entity (for resumability)
           const searchCandidates: SearchCandidates = {
             provider,
             searchedAt: new Date().toISOString(),
@@ -202,7 +297,10 @@ export class EntityEnrichmentService {
             entity.id,
             searchCandidates
           );
-          await this.entityRepo.updateStatus(entity.id, "candidates_found");
+          await this.entityRepo.updateStatus(entity.id, "CANDIDATES_FOUND");
+
+          // Store in map to avoid re-fetching
+          resultsMap.set(entity.id, candidates);
 
           console.log(
             `[search] Entity "${entity.name}": Found ${candidates.length} candidates`
@@ -218,6 +316,8 @@ export class EntityEnrichmentService {
     );
 
     await Promise.all(tasks);
+
+    return resultsMap;
   }
 
   private sortCandidatesByRelevance(candidates: Candidate[]): Candidate[] {
@@ -258,7 +358,7 @@ If no good match exists, set confidence < 0.6 and leave selectedExternalId empty
           { role: "user", content: userPrompt },
         ],
         disambiguationResponseSchema,
-        { temperature: 0.1, maxTokens: 4000 }
+        { temperature: 0.1, maxTokens: 4000 } //TODO=> move to constants
       );
 
       // Process disambiguation decisions in parallel
@@ -315,7 +415,6 @@ If no good match exists, set confidence < 0.6 and leave selectedExternalId empty
       );
     } catch (error) {
       console.error("Disambiguation failed:", error);
-      // Mark all as failed in parallel
       await Promise.all(
         enrichmentCandidates.map(({ entity }) =>
           limit(() => this.markAsFailed(entity, "Disambiguation failed"))
@@ -382,7 +481,7 @@ For each entity, provide:
     await this.entityRepo.updateMetadata(
       entity.id,
       metadata,
-      "enriched",
+      "ENRICHED",
       candidate.externalId
     );
     console.log(`Enriched entity "${entity.name}" → ${candidate.title}`);
@@ -442,14 +541,14 @@ For each entity, provide:
       })),
     };
 
-    await this.entityRepo.updateMetadata(entity.id, metadata, "ambiguous");
+    await this.entityRepo.updateMetadata(entity.id, metadata, "AMBIGUOUS");
     console.log(`Marked entity "${entity.name}" as ambiguous: ${reason}`);
   }
 
   private async markAsFailed(entity: Entity, error: string): Promise<void> {
     const metadata: FailedMetadata = { error };
 
-    await this.entityRepo.updateMetadata(entity.id, metadata, "failed");
+    await this.entityRepo.updateMetadata(entity.id, metadata, "FAILED");
     console.log(`Marked entity "${entity.name}" as failed: ${error}`);
   }
 }
