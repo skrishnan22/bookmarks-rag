@@ -32,7 +32,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "RAG Bookmarks Search",
+        title: "Wefts",
       },
     ],
     links: [{ rel: "stylesheet", href: appCss }],

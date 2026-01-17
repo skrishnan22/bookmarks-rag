@@ -1,45 +1,47 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RAG Bookmarks</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>RAG Bookmarks</h1>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wefts</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Wefts</h1>
+      </header>
 
-    <main>
-      <!-- Current page section -->
-      <section class="current-page">
-        <div class="page-preview">
-          <p class="page-title" id="pageTitle">Loading...</p>
-          <p class="page-url" id="pageUrl"></p>
-        </div>
-        <button id="addCurrentBtn" class="btn btn-primary">
-          Add to Bookmarks
-        </button>
-        <div id="status" class="status"></div>
-      </section>
+      <main>
+        <!-- Current page section -->
+        <section class="current-page">
+          <div class="page-preview">
+            <p class="page-title" id="pageTitle">Loading...</p>
+            <p class="page-url" id="pageUrl"></p>
+          </div>
+          <button id="addCurrentBtn" class="btn btn-primary">
+            Add to Bookmarks
+          </button>
+          <div id="status" class="status"></div>
+        </section>
 
-      <!-- Settings section -->
-      <section class="settings">
-        <label class="toggle-label">
-          <input type="checkbox" id="autoSyncToggle">
-          <span class="toggle-text">Auto-sync browser bookmarks</span>
-        </label>
-        <p class="settings-hint">When enabled, new browser bookmarks are automatically added</p>
-      </section>
-    </main>
+        <!-- Settings section -->
+        <section class="settings">
+          <label class="toggle-label">
+            <input type="checkbox" id="autoSyncToggle" />
+            <span class="toggle-text">Auto-sync browser bookmarks</span>
+          </label>
+          <p class="settings-hint">
+            When enabled, new browser bookmarks are automatically added
+          </p>
+        </section>
+      </main>
 
-    <footer>
-      <a href="#" id="openDashboard">Open Dashboard</a>
-    </footer>
-  </div>
+      <footer>
+        <a href="#" id="openDashboard">Open Dashboard</a>
+      </footer>
+    </div>
 
-  <script type="module" src="./popup.js"></script>
-</body>
+    <script type="module" src="./popup.js"></script>
+  </body>
 </html>

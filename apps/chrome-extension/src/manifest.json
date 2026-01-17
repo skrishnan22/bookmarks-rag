@@ -1,13 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "RAG Bookmarks",
+  "name": "Wefts",
   "version": "1.0.0",
   "description": "Save URLs to your RAG Bookmarks system",
-  "permissions": [
-    "activeTab",
-    "bookmarks",
-    "storage"
-  ],
+  "permissions": ["activeTab", "bookmarks", "storage"],
   "action": {
     "default_popup": "popup.html"
   },
