@@ -49,7 +49,7 @@ export function EntityCard({ entity, onClick, index = 0 }: EntityCardProps) {
   const Icon = TYPE_ICONS[entity.type];
   const coverUrl = getCoverUrl(entity);
   const title = getEntityTitle(entity);
-  const isPending = entity.status === "pending";
+  const isPending = entity.status === "PENDING";
 
   return (
     <motion.div

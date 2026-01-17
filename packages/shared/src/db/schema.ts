@@ -39,12 +39,12 @@ export const users = pgTable(
 );
 
 export const bookmarkStatusEnum = [
-  "PENDING",        // Newly created, waiting for processing
+  "PENDING", // Newly created, waiting for processing
   "MARKDOWN_READY", // URL fetched, markdown stored
-  "CONTENT_READY",  // Summary generated, entity extraction triggered
-  "CHUNKS_READY",   // Chunks created and stored
-  "DONE",           // Embeddings complete
-  "FAILED",         // Processing failed
+  "CONTENT_READY", // Summary generated, entity extraction triggered
+  "CHUNKS_READY", // Chunks created and stored
+  "DONE", // Embeddings complete
+  "FAILED", // Processing failed
 ] as const;
 
 export type BookmarkStatus = (typeof bookmarkStatusEnum)[number];
@@ -171,11 +171,11 @@ export const entityTypeEnum = ["book", "movie", "tv_show"] as const;
 export type EntityType = (typeof entityTypeEnum)[number];
 
 export const entityStatusEnum = [
-  "pending",
-  "candidates_found",
-  "enriched",
-  "ambiguous",
-  "failed",
+  "PENDING",
+  "CANDIDATES_FOUND",
+  "ENRICHED",
+  "AMBIGUOUS",
+  "FAILED",
 ] as const;
 export type EntityStatus = (typeof entityStatusEnum)[number];
 
@@ -224,12 +224,10 @@ export interface TvShowMetadata {
   genres?: string[];
 }
 
-// Metadata for failed enrichment attempts
 export interface FailedMetadata {
   error: string;
 }
 
-// Metadata for ambiguous matches requiring user disambiguation
 export interface AmbiguousMetadata {
   error: string;
   candidates: Array<{
@@ -256,7 +254,7 @@ export const entities = pgTable(
     name: text("name").notNull(),
     normalizedName: text("normalized_name").notNull(),
     externalId: text("external_id"),
-    status: text("status").$type<EntityStatus>().default("pending").notNull(),
+    status: text("status").$type<EntityStatus>().default("PENDING").notNull(),
     metadata: jsonb("metadata").$type<EntityMetadata>(),
     searchCandidates: jsonb("search_candidates").$type<SearchCandidates>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

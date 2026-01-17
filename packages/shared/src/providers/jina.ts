@@ -2,6 +2,7 @@
  * Jina AI provider for embeddings and reranking
  */
 import { z } from "zod";
+import { HttpError, parseRetryAfterSeconds } from "../utils/http-error.js";
 import type {
   EmbeddingProvider,
   RerankerProvider,
@@ -96,10 +97,28 @@ export class JinaEmbeddingProvider implements EmbeddingProvider {
     if (!response.ok) {
       const errorJson = await response.json().catch(() => ({}));
       const errorResult = jinaErrorResponseSchema.safeParse(errorJson);
-      const errorMessage = errorResult.success ? errorResult.data.detail : undefined;
-      throw new Error(
-        `Jina embedding error: ${errorMessage || response.statusText}`
+      const errorMessage = errorResult.success
+        ? errorResult.data.detail
+        : undefined;
+      const retryAfterSeconds = parseRetryAfterSeconds(
+        response.headers.get("retry-after")
       );
+      const errorOptions: {
+        message: string;
+        status: number;
+        url: string;
+        retryAfterSeconds?: number;
+      } = {
+        message: `Jina embedding error: ${errorMessage || response.statusText}`,
+        status: response.status,
+        url: `${JINA_API_BASE}/embeddings`,
+      };
+
+      if (retryAfterSeconds !== undefined) {
+        errorOptions.retryAfterSeconds = retryAfterSeconds;
+      }
+
+      throw new HttpError(errorOptions);
     }
 
     const json = await response.json();
@@ -147,10 +166,28 @@ export class JinaRerankerProvider implements RerankerProvider {
     if (!response.ok) {
       const errorJson = await response.json().catch(() => ({}));
       const errorResult = jinaErrorResponseSchema.safeParse(errorJson);
-      const errorMessage = errorResult.success ? errorResult.data.detail : undefined;
-      throw new Error(
-        `Jina rerank error: ${errorMessage || response.statusText}`
+      const errorMessage = errorResult.success
+        ? errorResult.data.detail
+        : undefined;
+      const retryAfterSeconds = parseRetryAfterSeconds(
+        response.headers.get("retry-after")
       );
+      const errorOptions: {
+        message: string;
+        status: number;
+        url: string;
+        retryAfterSeconds?: number;
+      } = {
+        message: `Jina rerank error: ${errorMessage || response.statusText}`,
+        status: response.status,
+        url: `${JINA_API_BASE}/rerank`,
+      };
+
+      if (retryAfterSeconds !== undefined) {
+        errorOptions.retryAfterSeconds = retryAfterSeconds;
+      }
+
+      throw new HttpError(errorOptions);
     }
 
     const json = await response.json();

@@ -1,6 +1,7 @@
 import { parseHTML } from "linkedom";
 import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
+import { HttpError, parseRetryAfterSeconds } from "../utils/http-error.js";
 
 export interface UrlMetadata {
   title: string;
@@ -39,9 +40,25 @@ export async function fetchAndConvertToMarkdown(
     });
 
     if (!response.ok) {
-      throw new Error(
-        `Fetch failed: ${response.status} ${response.statusText}`
+      const retryAfterSeconds = parseRetryAfterSeconds(
+        response.headers.get("retry-after")
       );
+      const errorOptions: {
+        message: string;
+        status: number;
+        url: string;
+        retryAfterSeconds?: number;
+      } = {
+        message: `Fetch failed: ${response.status} ${response.statusText}`,
+        status: response.status,
+        url,
+      };
+
+      if (retryAfterSeconds !== undefined) {
+        errorOptions.retryAfterSeconds = retryAfterSeconds;
+      }
+
+      throw new HttpError(errorOptions);
     }
 
     const contentType = response.headers.get("content-type") || "";
@@ -49,7 +66,11 @@ export async function fetchAndConvertToMarkdown(
       !contentType.includes("text/html") &&
       !contentType.includes("text/plain")
     ) {
-      throw new Error(`Unsupported content type: ${contentType}`);
+      throw new HttpError({
+        message: `Unsupported content type: ${contentType}`,
+        status: 415,
+        url,
+      });
     }
 
     const html = await response.text();

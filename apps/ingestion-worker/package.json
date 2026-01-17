@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@rag-bookmarks/shared": "workspace:*",
-    "p-limit": "^7.2.0"
+    "p-limit": "^7.2.0",
+    "p-retry": "^7.1.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240222.0",

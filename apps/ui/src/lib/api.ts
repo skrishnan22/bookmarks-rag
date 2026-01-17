@@ -74,7 +74,7 @@ export async function searchBookmarks(
 
 // Entity types
 export type EntityType = "book" | "movie" | "tv_show";
-export type EntityStatus = "pending" | "enriched" | "ambiguous" | "failed";
+export type EntityStatus = "PENDING" | "CANDIDATES_FOUND" | "ENRICHED" | "AMBIGUOUS" | "FAILED";
 
 export interface BookMetadata {
   canonical_title?: string;

@@ -85,7 +85,7 @@ export function EntityListItem({
   const coverUrl = getCoverUrl(entity);
   const title = getEntityTitle(entity);
   const subtitle = getEntitySubtitle(entity);
-  const isPending = entity.status === "pending";
+  const isPending = entity.status === "PENDING";
 
   return (
     <motion.div
