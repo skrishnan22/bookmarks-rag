@@ -1,11 +1,3 @@
-/**
- * Entity Worker
- *
- * Consumes entity queue and processes two message types:
- * 1. entity-extraction: Extracts entities from bookmark markdown, creates/links them
- * 2. entity-enrichment: Enriches pending entities for a user with external metadata
- */
-
 import pLimit from "p-limit";
 
 import type {
@@ -41,7 +33,6 @@ async function handleEntityExtraction(
     return false;
   }
 
-  // Skip if entities already extracted for this bookmark
   if (bookmark.entitiesExtracted) {
     console.log(
       `[extraction] Bookmark ${bookmarkId}: Already extracted, skipping`
@@ -60,7 +51,7 @@ async function handleEntityExtraction(
 
   if (extracted.length === 0) {
     console.log(`[extraction] Bookmark ${bookmarkId}: No entities found`);
-    // Mark as extracted even if no entities found (to avoid re-processing)
+    // Mark as extracted even if no entities found to avoid re-processing
     await bookmarkRepo.setEntitiesExtracted(bookmarkId, true);
     return false;
   }
@@ -69,8 +60,7 @@ async function handleEntityExtraction(
     `[extraction] Bookmark ${bookmarkId}: Found ${extracted.length} entities`
   );
 
-  let createdNewEntities = false;
-
+  let createdNew = false;
   for (const entity of extracted) {
     const normalizedName = normalizeEntityName(entity.name);
 
@@ -91,12 +81,13 @@ async function handleEntityExtraction(
         `[extraction] Bookmark ${bookmarkId}: Linked existing "${entity.name}"`
       );
     } else {
+      createdNew = true;
       const newEntity = await entityRepo.create({
         userId,
         type: entity.type,
         name: entity.name,
         normalizedName,
-        status: "pending",
+        status: "PENDING",
       });
 
       await entityRepo.linkToBookmark({
@@ -108,15 +99,13 @@ async function handleEntityExtraction(
       console.log(
         `[extraction] Bookmark ${bookmarkId}: Created "${entity.name}"`
       );
-      createdNewEntities = true;
     }
   }
 
-  // Mark extraction complete AFTER all entities are stored
   await bookmarkRepo.setEntitiesExtracted(bookmarkId, true);
 
   console.log(`[extraction] Bookmark ${bookmarkId}: Complete`);
-  return createdNewEntities;
+  return createdNew;
 }
 
 async function handleEntityEnrichment(
@@ -124,8 +113,8 @@ async function handleEntityEnrichment(
   env: Env,
   entityRepo: EntityRepository
 ): Promise<void> {
-  const { userId } = message;
-  console.log(`[enrichment] User ${userId}: Starting`);
+  const { userId, bookmarkId } = message;
+  console.log(`[enrichment] Bookmark ${bookmarkId}: Starting`);
 
   const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
   const openLibrary = new OpenLibraryProvider();
@@ -138,8 +127,8 @@ async function handleEntityEnrichment(
     llmProvider
   );
 
-  await enrichmentService.enrichPendingEntities(userId);
-  console.log(`[enrichment] User ${userId}: Complete`);
+  await enrichmentService.enrichEntitiesForBookmark(userId, bookmarkId);
+  console.log(`[enrichment] Bookmark ${bookmarkId}: Complete`);
 }
 
 export default {
@@ -153,12 +142,9 @@ export default {
     const bookmarkRepo = new BookmarkRepository(db);
     const entityRepo = new EntityRepository(db);
 
-    const limit = pLimit(2);
+    const limit = pLimit(2); //TODO=>move this to worker config
 
     try {
-      // Track users who need enrichment (from extraction messages that created new entities)
-      const usersNeedingEnrichment = new Set<string>();
-
       await Promise.all(
         batch.messages.map((message) =>
           limit(async () => {
@@ -173,7 +159,14 @@ export default {
                   entityRepo
                 );
                 if (createdNew) {
-                  usersNeedingEnrichment.add(msg.userId);
+                  await env.ENTITY_QUEUE.send({
+                    type: "entity-enrichment",
+                    userId: msg.userId,
+                    bookmarkId: msg.bookmarkId,
+                  });
+                  console.log(
+                    `Queued enrichment for bookmark ${msg.bookmarkId}`
+                  );
                 }
               } else if (msg.type === "entity-enrichment") {
                 await handleEntityEnrichment(msg, env, entityRepo);
@@ -187,15 +180,6 @@ export default {
           })
         )
       );
-
-      // Queue enrichment for users who had new entities created
-      for (const userId of usersNeedingEnrichment) {
-        await env.ENTITY_QUEUE.send({
-          type: "entity-enrichment",
-          userId,
-        });
-        console.log(`Queued enrichment for user ${userId}`);
-      }
     } finally {
       await close();
     }

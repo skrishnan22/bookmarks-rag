@@ -17,6 +17,7 @@ export interface EntityExtractionMessage {
 export interface EntityEnrichmentMessage {
   type: "entity-enrichment";
   userId: string;
+  bookmarkId: string;
 }
 
 export type EntityQueueMessage =
