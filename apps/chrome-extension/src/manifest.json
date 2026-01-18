@@ -3,12 +3,30 @@
   "name": "Wefts",
   "version": "1.0.0",
   "description": "Save URLs to your RAG Bookmarks system",
-  "permissions": ["activeTab", "bookmarks", "storage"],
+  "permissions": ["activeTab", "bookmarks", "storage", "scripting"],
+  "host_permissions": [
+    "https://twitter.com/*",
+    "https://x.com/*",
+    "https://www.twitter.com/*",
+    "https://www.x.com/*"
+  ],
   "action": {
     "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js",
     "type": "module"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://twitter.com/*/status/*",
+        "https://x.com/*/status/*",
+        "https://www.twitter.com/*/status/*",
+        "https://www.x.com/*/status/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
