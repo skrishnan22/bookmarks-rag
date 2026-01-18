@@ -236,6 +236,13 @@ export interface AmbiguousMetadata {
   }>;
 }
 
+export interface ExtractionHints {
+  year: number | null;
+  author: string | null; // books
+  director: string | null; // movies/tv
+  language: string | null;
+}
+
 export type EntityMetadata =
   | BookMetadata
   | MovieMetadata
@@ -283,6 +290,7 @@ export const entityBookmarks = pgTable(
       .references(() => bookmarks.id, { onDelete: "cascade" }),
     contextSnippet: text("context_snippet"),
     confidence: real("confidence").notNull(),
+    extractionHints: jsonb("extraction_hints").$type<ExtractionHints>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (table) => [

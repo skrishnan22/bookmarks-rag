@@ -82,6 +82,7 @@ async function handleEntityExtraction(
         bookmarkId,
         contextSnippet: entity.contextSnippet,
         confidence: entity.confidence,
+        extractionHints: entity.hints ?? undefined,
       });
       console.log(
         `[extraction] Bookmark ${bookmarkId}: Linked existing "${entity.name}"`
@@ -101,6 +102,7 @@ async function handleEntityExtraction(
         bookmarkId,
         contextSnippet: entity.contextSnippet,
         confidence: entity.confidence,
+        extractionHints: entity.hints ?? undefined,
       });
       console.log(
         `[extraction] Bookmark ${bookmarkId}: Created "${entity.name}"`

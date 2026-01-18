@@ -4,11 +4,19 @@ import type { LLMProvider } from "../providers/types.js";
 const MAX_INPUT_CHARS = 48000;
 const MIN_CONFIDENCE = 0.5;
 
+const extractionHintsSchema = z.object({
+  year: z.number().nullable(),
+  author: z.string().nullable(),
+  director: z.string().nullable(),
+  language: z.string().nullable(),
+});
+
 const extractedEntitySchema = z.object({
   type: z.enum(["book", "movie", "tv_show"]),
   name: z.string(),
   contextSnippet: z.string(),
   confidence: z.number().min(0).max(1),
+  hints: extractionHintsSchema.nullable(),
 });
 
 const contentExtractionResponseSchema = z.object({
@@ -46,6 +54,14 @@ Entity types:
 - tv_show: TV series, web series, limited series
 
 If an entity could be both book and movie (e.g., "Dune"), extract as the type most relevant to context.
+
+3. EXTRACTION HINTS: For each entity, provide a hints object with these fields (use null if not explicitly mentioned in content):
+   - year: Publication year (books) or release year (movies/TV) as a number, or null
+   - author: Author name (for books only), or null
+   - director: Director name (for movies/TV only), or null
+   - language: Original language if mentioned, or null
+
+Only extract hints that are explicitly stated in the content. Use null for fields not mentioned. Do not guess or infer.
 
 Return empty entities array if no qualifying entities found.`;
 

@@ -11,6 +11,7 @@ import {
   type EntityBookmark,
   type Bookmark,
   type SearchCandidates,
+  type ExtractionHints,
 } from "../db/schema.js";
 
 export interface CreateEntityParams {
@@ -26,8 +27,9 @@ export interface CreateEntityParams {
 export interface LinkEntityToBookmarkParams {
   entityId: string;
   bookmarkId: string;
-  contextSnippet?: string;
+  contextSnippet?: string | undefined;
   confidence: number;
+  extractionHints?: ExtractionHints | undefined;
 }
 
 export class EntityRepository {
@@ -103,6 +105,7 @@ export class EntityRepository {
         bookmarkId: params.bookmarkId,
         contextSnippet: params.contextSnippet,
         confidence: params.confidence,
+        extractionHints: params.extractionHints,
       })
       .onConflictDoNothing()
       .returning();
@@ -297,6 +300,25 @@ export class EntityRepository {
 
     return result.map((r) => r.entity);
   }
+
+  async getExtractionHintsForEntity(
+    entityId: string
+  ): Promise<
+    Array<{
+      contextSnippet: string | null;
+      extractionHints: ExtractionHints | null;
+    }>
+  > {
+    const result = await this.db
+      .select({
+        contextSnippet: entityBookmarks.contextSnippet,
+        extractionHints: entityBookmarks.extractionHints,
+      })
+      .from(entityBookmarks)
+      .where(eq(entityBookmarks.entityId, entityId));
+
+    return result;
+  }
 }
 
 export type {
@@ -306,4 +328,5 @@ export type {
   EntityMetadata,
   EntityBookmark,
   SearchCandidates,
+  ExtractionHints,
 };

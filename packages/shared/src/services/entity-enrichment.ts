@@ -7,6 +7,7 @@ import type {
   FailedMetadata,
   SearchCandidates,
   SearchCandidate,
+  ExtractionHints,
 } from "../db/schema.js";
 import type { EntityRepository } from "../repositories/entities.js";
 import type { LLMProvider } from "../providers/types.js";
@@ -30,6 +31,7 @@ type Candidate = BookCandidate | MovieCandidate | TvShowCandidate;
 interface EnrichmentCandidate {
   entity: Entity;
   candidates: Candidate[];
+  hints?: ExtractionHints | undefined;
 }
 
 interface ClearMatch {
@@ -186,7 +188,8 @@ export class EntityEnrichmentService {
     for (const entity of pendingEntities) {
       const candidates = candidatesMap.get(entity.id);
       if (candidates) {
-        enrichmentCandidates.push({ entity, candidates });
+        const hints = await this.getFirstHintsForEntity(entity.id);
+        enrichmentCandidates.push({ entity, candidates, hints });
       }
     }
 
@@ -201,10 +204,24 @@ export class EntityEnrichmentService {
       const candidates = entity.searchCandidates.results.map((sc) =>
         searchCandidateToCandidate(sc, entity.type)
       );
-      enrichmentCandidates.push({ entity, candidates });
+      const hints = await this.getFirstHintsForEntity(entity.id);
+      enrichmentCandidates.push({ entity, candidates, hints });
     }
 
     return enrichmentCandidates;
+  }
+
+  private async getFirstHintsForEntity(
+    entityId: string
+  ): Promise<ExtractionHints | undefined> {
+    const contexts = await this.entityRepo.getExtractionHintsForEntity(entityId);
+    // Return the first non-null hints found
+    for (const ctx of contexts) {
+      if (ctx.extractionHints) {
+        return ctx.extractionHints;
+      }
+    }
+    return undefined;
   }
 
   private async categorizeMatches(
@@ -427,7 +444,7 @@ If no good match exists, set confidence < 0.6 and leave selectedExternalId empty
     enrichmentCandidates: EnrichmentCandidate[]
   ): string {
     const entityBlocks = enrichmentCandidates.map((ec) => {
-      const { entity, candidates } = ec;
+      const { entity, candidates, hints } = ec;
 
       const candidatesText = candidates
         .map((c, idx) => {
@@ -454,9 +471,12 @@ If no good match exists, set confidence < 0.6 and leave selectedExternalId empty
         })
         .join("\n\n");
 
+      // Build hints text if available
+      const hintsText = this.formatHints(hints);
+
       return `Entity ID: ${entity.id}
 Type: ${entity.type}
-Name: "${entity.name}"
+Name: "${entity.name}"${hintsText}
 
 Candidates:
 ${candidatesText}`;
@@ -471,6 +491,19 @@ For each entity, provide:
 - selectedExternalId: The external ID of the best matching candidate (or null if no good match)
 - confidence: Your confidence score (0.0-1.0)
 - reasoning: Brief explanation of your choice`;
+  }
+
+  private formatHints(hints?: ExtractionHints | undefined): string {
+    if (!hints) return "";
+
+    const parts: string[] = [];
+    if (hints.year !== null) parts.push(`Year: ${hints.year}`);
+    if (hints.author !== null) parts.push(`Author: ${hints.author}`);
+    if (hints.director !== null) parts.push(`Director: ${hints.director}`);
+    if (hints.language !== null) parts.push(`Language: ${hints.language}`);
+
+    if (parts.length === 0) return "";
+    return `\nContext Hints: ${parts.join(", ")}`;
   }
 
   private async enrichEntity(
