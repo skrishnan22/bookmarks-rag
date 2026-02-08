@@ -2,6 +2,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { BookMarked, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "~/lib/utils";
+import { AuthStatus } from "~/components/auth/AuthStatus";
 
 export function TabNavigation() {
   const location = useLocation();
@@ -12,7 +13,7 @@ export function TabNavigation() {
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="flex items-center p-1 rounded-full bg-white/60 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.04)] ring-1 ring-zinc-900/5"
+      className="flex items-center gap-3 p-1 pr-3 rounded-full bg-white/60 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.04)] ring-1 ring-zinc-900/5"
     >
       <div className="flex items-center gap-1 p-0.5">
         <NavLink
@@ -28,6 +29,7 @@ export function TabNavigation() {
           label="Collections"
         />
       </div>
+      <AuthStatus />
     </motion.div>
   );
 }

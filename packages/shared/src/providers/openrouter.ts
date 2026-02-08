@@ -166,10 +166,7 @@ export class OpenRouterLLMProvider implements LLMProvider {
     try {
       const { text } = await generateText({
         model: this.openai(this.model),
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
+        messages,
         ...(options?.maxTokens && { maxOutputTokens: options.maxTokens }),
         ...(options?.temperature && { temperature: options.temperature }),
         ...(options?.stopSequences && { stopSequences: options.stopSequences }),
@@ -188,10 +185,7 @@ export class OpenRouterLLMProvider implements LLMProvider {
     try {
       const { object } = await generateObject({
         model: this.openai(this.model),
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
+        messages,
         schema,
         ...(options?.maxTokens && { maxOutputTokens: options.maxTokens }),
         ...(options?.temperature && { temperature: options.temperature }),

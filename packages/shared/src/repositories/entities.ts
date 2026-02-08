@@ -12,6 +12,7 @@ import {
   type Bookmark,
   type SearchCandidates,
   type ExtractionHints,
+  type EntitySource,
 } from "../db/schema.js";
 
 export interface CreateEntityParams {
@@ -30,6 +31,8 @@ export interface LinkEntityToBookmarkParams {
   contextSnippet?: string | undefined;
   confidence: number;
   extractionHints?: ExtractionHints | undefined;
+  source?: EntitySource | undefined;
+  sourceImageId?: string | undefined;
 }
 
 export class EntityRepository {
@@ -106,6 +109,8 @@ export class EntityRepository {
         contextSnippet: params.contextSnippet,
         confidence: params.confidence,
         extractionHints: params.extractionHints,
+        source: params.source ?? "text",
+        sourceImageId: params.sourceImageId,
       })
       .onConflictDoNothing()
       .returning();
@@ -167,6 +172,15 @@ export class EntityRepository {
     return result[0] ?? null;
   }
 
+  async findByIdForUser(userId: string, id: string): Promise<Entity | null> {
+    const result = await this.db
+      .select()
+      .from(entities)
+      .where(and(eq(entities.id, id), eq(entities.userId, userId)))
+      .limit(1);
+    return result[0] ?? null;
+  }
+
   async listByUserWithCounts(
     userId: string,
     type?: EntityType,
@@ -216,7 +230,10 @@ export class EntityRepository {
     limit: number = 20,
     offset: number = 0
   ): Promise<
-    (Pick<Bookmark, "id" | "url" | "title" | "summary" | "favicon" | "ogImage" | "createdAt"> & {
+    (Pick<
+      Bookmark,
+      "id" | "url" | "title" | "summary" | "favicon" | "ogImage" | "createdAt"
+    > & {
       contextSnippet: string | null;
       confidence: number;
     })[]
@@ -243,11 +260,70 @@ export class EntityRepository {
     return result;
   }
 
+  async getBookmarksForEntityForUser(
+    userId: string,
+    entityId: string,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<
+    (Pick<
+      Bookmark,
+      "id" | "url" | "title" | "summary" | "favicon" | "ogImage" | "createdAt"
+    > & {
+      contextSnippet: string | null;
+      confidence: number;
+    })[]
+  > {
+    const result = await this.db
+      .select({
+        id: bookmarks.id,
+        url: bookmarks.url,
+        title: bookmarks.title,
+        summary: bookmarks.summary,
+        favicon: bookmarks.favicon,
+        ogImage: bookmarks.ogImage,
+        createdAt: bookmarks.createdAt,
+        contextSnippet: entityBookmarks.contextSnippet,
+        confidence: entityBookmarks.confidence,
+      })
+      .from(entityBookmarks)
+      .innerJoin(bookmarks, eq(entityBookmarks.bookmarkId, bookmarks.id))
+      .where(
+        and(
+          eq(entityBookmarks.entityId, entityId),
+          eq(bookmarks.userId, userId)
+        )
+      )
+      .orderBy(desc(entityBookmarks.confidence))
+      .limit(limit)
+      .offset(offset);
+
+    return result;
+  }
+
   async countBookmarksForEntity(entityId: string): Promise<number> {
     const result = await this.db
       .select({ count: count() })
       .from(entityBookmarks)
       .where(eq(entityBookmarks.entityId, entityId));
+
+    return result[0]?.count ?? 0;
+  }
+
+  async countBookmarksForEntityForUser(
+    userId: string,
+    entityId: string
+  ): Promise<number> {
+    const result = await this.db
+      .select({ count: count() })
+      .from(entityBookmarks)
+      .innerJoin(bookmarks, eq(entityBookmarks.bookmarkId, bookmarks.id))
+      .where(
+        and(
+          eq(entityBookmarks.entityId, entityId),
+          eq(bookmarks.userId, userId)
+        )
+      );
 
     return result[0]?.count ?? 0;
   }
@@ -301,9 +377,7 @@ export class EntityRepository {
     return result.map((r) => r.entity);
   }
 
-  async getExtractionHintsForEntity(
-    entityId: string
-  ): Promise<
+  async getExtractionHintsForEntity(entityId: string): Promise<
     Array<{
       contextSnippet: string | null;
       extractionHints: ExtractionHints | null;

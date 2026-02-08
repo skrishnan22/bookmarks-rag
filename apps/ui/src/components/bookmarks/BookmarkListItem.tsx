@@ -5,6 +5,7 @@ import {
   MoreHorizontal,
   ArrowUpRight,
   Trash2,
+  Images,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "~/lib/utils";
@@ -15,9 +16,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "~/components/ui/dropdown-menu";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { useDeleteBookmark } from "~/hooks/useBookmarks";
+import { ImageGalleryModal } from "~/components/images/ImageGalleryModal";
 
 interface BookmarkListItemProps {
   bookmark: {
@@ -39,6 +42,7 @@ export function BookmarkListItem({
 }: BookmarkListItemProps) {
   const [faviconError, setFaviconError] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showImageGallery, setShowImageGallery] = useState(false);
   const deleteBookmark = useDeleteBookmark();
 
   const hostname = new URL(bookmark.url).hostname.replace(/^www\./, "");
@@ -134,6 +138,16 @@ export function BookmarkListItem({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowImageGallery(true);
+              }}
+            >
+              <Images className="h-4 w-4 mr-2" />
+              Images
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
               variant="destructive"
               onClick={(e) => {
                 e.stopPropagation();
@@ -160,6 +174,13 @@ export function BookmarkListItem({
         confirmLabel="Delete"
         variant="destructive"
         isLoading={deleteBookmark.isPending}
+      />
+
+      <ImageGalleryModal
+        bookmarkId={bookmark.id}
+        bookmarkTitle={bookmark.title}
+        isOpen={showImageGallery}
+        onClose={() => setShowImageGallery(false)}
       />
     </motion.div>
   );

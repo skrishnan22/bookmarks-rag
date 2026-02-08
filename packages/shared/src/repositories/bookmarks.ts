@@ -18,6 +18,7 @@ export interface UpdateBookmarkParams {
   status?: BookmarkStatus;
   errorMessage?: string;
   entitiesExtracted?: boolean;
+  imageCount?: number;
 }
 
 export class BookmarkRepository {
@@ -44,6 +45,16 @@ export class BookmarkRepository {
       .select()
       .from(bookmarks)
       .where(eq(bookmarks.id, id))
+      .limit(1);
+
+    return result[0] ?? null;
+  }
+
+  async findByIdForUser(userId: string, id: string): Promise<Bookmark | null> {
+    const result = await this.db
+      .select()
+      .from(bookmarks)
+      .where(and(eq(bookmarks.id, id), eq(bookmarks.userId, userId)))
       .limit(1);
 
     return result[0] ?? null;
@@ -100,6 +111,22 @@ export class BookmarkRepository {
       .select()
       .from(bookmarks)
       .where(inArray(bookmarks.id, ids));
+
+    return new Map(results.map((b) => [b.id, b]));
+  }
+
+  async findByIdsForUser(
+    userId: string,
+    ids: string[]
+  ): Promise<Map<string, Bookmark>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const results = await this.db
+      .select()
+      .from(bookmarks)
+      .where(and(eq(bookmarks.userId, userId), inArray(bookmarks.id, ids)));
 
     return new Map(results.map((b) => [b.id, b]));
   }
