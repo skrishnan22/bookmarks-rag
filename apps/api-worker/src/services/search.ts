@@ -116,6 +116,7 @@ export async function search(
   const enrichmentStart = performance.now();
   const finalResults = await enrichWithBookmarkMetadata(
     filteredResults,
+    userId,
     bookmarkRepo
   );
   const enrichmentDuration = performance.now() - enrichmentStart;
@@ -159,10 +160,11 @@ async function rerankResults(
 
 async function enrichWithBookmarkMetadata(
   results: Array<HybridSearchResult & { finalScore: number }>,
+  userId: string,
   bookmarkRepo: BookmarkRepository
 ): Promise<SearchResultItem[]> {
   const bookmarkIds = [...new Set(results.map((r) => r.bookmarkId))];
-  const bookmarksMap = await bookmarkRepo.findByIds(bookmarkIds);
+  const bookmarksMap = await bookmarkRepo.findByIdsForUser(userId, bookmarkIds);
 
   return results.map((r) => {
     const bookmark = bookmarksMap.get(r.bookmarkId);

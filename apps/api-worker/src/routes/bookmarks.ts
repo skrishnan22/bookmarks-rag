@@ -3,20 +3,18 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   createBookmarkSchema,
-  createDb,
+  createAuthedDb,
   BookmarkRepository,
 } from "@rag-bookmarks/shared";
-import type { Env, BookmarkIngestionMessage } from "../types.js";
+import type { AppContext, BookmarkIngestionMessage } from "../types.js";
+import { imagesRouter } from "./images.js";
 
 const listBookmarksSchema = z.object({
   limit: z.coerce.number().min(1).max(100).optional().default(20),
   offset: z.coerce.number().min(0).optional().default(0),
 });
 
-// Test user ID for development (until auth is implemented)
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
-
-const bookmarksRouter = new Hono<{ Bindings: Env }>();
+const bookmarksRouter = new Hono<AppContext>();
 
 /**
  * POST /api/v1/bookmarks
@@ -25,6 +23,8 @@ const bookmarksRouter = new Hono<{ Bindings: Env }>();
  *
  * Request body:
  *   { url: string }
+ *   OR
+ *   { url: string, extractedContent: { title, content, contentType?, platformData? }, images: [...] }
  *
  * Response:
  *   201: { success: true, data: { id, url, status } }
@@ -36,12 +36,10 @@ bookmarksRouter.post(
   "/",
   zValidator("json", createBookmarkSchema),
   async (c) => {
-    const { url } = c.req.valid("json");
-    const { db } = createDb(c.env.DATABASE_URL);
+    const { url, extractedContent, images } = c.req.valid("json");
+    const { userId } = c.get("auth");
+    const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
     const bookmarkRepo = new BookmarkRepository(db);
-
-    // TODO: Get userId from auth context when implemented
-    const userId = TEST_USER_ID;
 
     try {
       const existing = await bookmarkRepo.findByUserAndUrl(userId, url);
@@ -66,6 +64,33 @@ bookmarksRouter.post(
         url: bookmark.url,
         userId: bookmark.userId,
       };
+
+      if (extractedContent) {
+        message.extractedContent = {
+          title: extractedContent.title,
+          content: extractedContent.content,
+          ...(extractedContent.contentType && {
+            contentType: extractedContent.contentType,
+          }),
+          ...(extractedContent.platformData && {
+            platformData: extractedContent.platformData,
+          }),
+        };
+      }
+
+      if (images && images.length > 0) {
+        message.extractedImages = images.map((img) => ({
+          url: img.url,
+          ...(img.altText && { altText: img.altText }),
+          position: img.position,
+          ...(img.nearbyText && { nearbyText: img.nearbyText }),
+          ...(img.heuristicScore !== undefined && {
+            heuristicScore: img.heuristicScore,
+          }),
+          ...(img.estimatedType && { estimatedType: img.estimatedType }),
+        }));
+      }
+
       await c.env.INGESTION_QUEUE.send(message);
 
       console.log(`Bookmark ${bookmark.id} created and queued for processing`);
@@ -104,11 +129,12 @@ bookmarksRouter.post(
  */
 bookmarksRouter.get("/:id", async (c) => {
   const { id } = c.req.param();
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { userId } = c.get("auth");
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const bookmarkRepo = new BookmarkRepository(db);
 
   try {
-    const bookmark = await bookmarkRepo.findById(id);
+    const bookmark = await bookmarkRepo.findByIdForUser(userId, id);
     if (!bookmark) {
       return c.json(
         {
@@ -118,8 +144,6 @@ bookmarksRouter.get("/:id", async (c) => {
         404
       );
     }
-
-    // TODO: Check bookmark belongs to authenticated user
 
     return c.json({
       success: true,
@@ -151,11 +175,9 @@ bookmarksRouter.get(
   zValidator("query", listBookmarksSchema),
   async (c) => {
     const { limit, offset } = c.req.valid("query");
-    const { db } = createDb(c.env.DATABASE_URL);
+    const { userId } = c.get("auth");
+    const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
     const bookmarkRepo = new BookmarkRepository(db);
-
-    // TODO: Get userId from auth context
-    const userId = TEST_USER_ID;
 
     try {
       const bookmarks = await bookmarkRepo.listByUser(userId, limit, offset);
@@ -192,11 +214,9 @@ bookmarksRouter.get(
  */
 bookmarksRouter.delete("/:id", async (c) => {
   const { id } = c.req.param();
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { userId } = c.get("auth");
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const bookmarkRepo = new BookmarkRepository(db);
-
-  // TODO: Get userId from auth context when implemented
-  const userId = TEST_USER_ID;
 
   try {
     const deleted = await bookmarkRepo.delete(id, userId);
@@ -225,5 +245,8 @@ bookmarksRouter.delete("/:id", async (c) => {
     );
   }
 });
+
+// Mount images router under /:bookmarkId/images
+bookmarksRouter.route("/:bookmarkId/images", imagesRouter);
 
 export { bookmarksRouter };

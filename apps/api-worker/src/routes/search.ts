@@ -2,23 +2,21 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  createDb,
+  createAuthedDb,
   BookmarkRepository,
   createEmbeddingProvider,
   createRerankerProvider,
 } from "@rag-bookmarks/shared";
-import type { Env } from "../types.js";
+import type { AppContext } from "../types.js";
 import { SearchRepository } from "../repositories/search.js";
 import { search } from "../services/search.js";
-
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const searchQuerySchema = z.object({
   q: z.string().min(1).max(500),
   limit: z.coerce.number().min(1).max(50).optional().default(5),
 });
 
-const searchRouter = new Hono<{ Bindings: Env }>();
+const searchRouter = new Hono<AppContext>();
 
 /**
  * GET /api/v1/search?q=stripe+payment+integration
@@ -36,11 +34,10 @@ const searchRouter = new Hono<{ Bindings: Env }>();
  */
 searchRouter.get("/", zValidator("query", searchQuerySchema), async (c) => {
   const { q, limit } = c.req.valid("query");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { userId } = c.get("auth");
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const searchRepo = new SearchRepository(db);
   const bookmarkRepo = new BookmarkRepository(db);
-
-  const userId = TEST_USER_ID;
 
   try {
     const embeddingProvider = createEmbeddingProvider(

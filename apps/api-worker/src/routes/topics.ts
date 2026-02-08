@@ -1,14 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { createDb, BookmarkRepository } from "@rag-bookmarks/shared";
-import type { Env } from "../types.js";
+import { createAuthedDb, BookmarkRepository } from "@rag-bookmarks/shared";
+import type { AppContext } from "../types.js";
 import {
   TopicRepository,
   BookmarkTopicRepository,
 } from "../repositories/topics.js";
-
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const listTopicsSchema = z.object({
   limit: z.coerce.number().min(1).max(100).optional().default(50),
@@ -26,13 +24,13 @@ const updateTopicSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-const topicsRouter = new Hono<{ Bindings: Env }>();
+const topicsRouter = new Hono<AppContext>();
 
 topicsRouter.get("/", zValidator("query", listTopicsSchema), async (c) => {
   const { limit, offset } = c.req.valid("query");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { userId } = c.get("auth");
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const topicRepo = new TopicRepository(db);
-  const userId = TEST_USER_ID;
 
   try {
     const topics = await topicRepo.findByUserId(userId);
@@ -68,11 +66,12 @@ topicsRouter.get("/", zValidator("query", listTopicsSchema), async (c) => {
 
 topicsRouter.get("/:id", async (c) => {
   const { id } = c.req.param();
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { userId } = c.get("auth");
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const topicRepo = new TopicRepository(db);
 
   try {
-    const topic = await topicRepo.findById(id);
+    const topic = await topicRepo.findByIdForUser(userId, id);
     if (!topic) {
       return c.json(
         {
@@ -114,13 +113,14 @@ topicsRouter.get(
   async (c) => {
     const { id } = c.req.param();
     const { limit, offset, minScore } = c.req.valid("query");
-    const { db } = createDb(c.env.DATABASE_URL);
+    const { userId } = c.get("auth");
+    const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
     const topicRepo = new TopicRepository(db);
     const bookmarkTopicRepo = new BookmarkTopicRepository(db);
     const bookmarkRepo = new BookmarkRepository(db);
 
     try {
-      const topic = await topicRepo.findById(id);
+      const topic = await topicRepo.findByIdForUser(userId, id);
       if (!topic) {
         return c.json(
           {
@@ -140,7 +140,10 @@ topicsRouter.get(
       const filteredByScore = paginated.filter((a) => a.score >= minScore);
 
       const bookmarkIds = filteredByScore.map((a) => a.bookmarkId);
-      const bookmarksMap = await bookmarkRepo.findByIds(bookmarkIds);
+      const bookmarksMap = await bookmarkRepo.findByIdsForUser(
+        userId,
+        bookmarkIds
+      );
 
       const bookmarksWithScore = filteredByScore
         .map((a) => {
@@ -188,11 +191,12 @@ topicsRouter.get(
 topicsRouter.put("/:id", zValidator("json", updateTopicSchema), async (c) => {
   const { id } = c.req.param();
   const updates = c.req.valid("json");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { userId } = c.get("auth");
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const topicRepo = new TopicRepository(db);
 
   try {
-    const topic = await topicRepo.findById(id);
+    const topic = await topicRepo.findByIdForUser(userId, id);
     if (!topic) {
       return c.json(
         {
@@ -231,9 +235,9 @@ topicsRouter.put("/:id", zValidator("json", updateTopicSchema), async (c) => {
 
 // TODO: Re-enable when clustering worker is implemented
 // topicsRouter.post("/recluster", async (c) => {
-//   const { db } = createDb(c.env.DATABASE_URL);
+//   const { userId } = c.get("auth");
+//   const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
 //   const bookmarkRepo = new BookmarkRepository(db);
-//   const userId = TEST_USER_ID;
 //
 //   try {
 //     const bookmarkCount =
