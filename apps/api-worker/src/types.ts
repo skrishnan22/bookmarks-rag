@@ -7,8 +7,11 @@ export interface Env {
   JINA_API_KEY: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  JWT_SECRET: string;
   TMDB_API_KEY: string;
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+  AUTH_COOKIE_DOMAIN?: string;
+  WEB_ORIGIN?: string;
 
   // Queue bindings (producer only)
   INGESTION_QUEUE: Queue<BookmarkIngestionMessage>;
@@ -24,5 +27,12 @@ export interface BookmarkIngestionMessage {
 // Auth context
 export interface AuthContext {
   userId: string;
-  email: string;
+  email: string | null;
+}
+
+export interface AppContext {
+  Bindings: Env;
+  Variables: {
+    auth: AuthContext;
+  };
 }

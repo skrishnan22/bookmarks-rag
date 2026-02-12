@@ -11,20 +11,21 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
-import type { Env } from "./types.js";
+import type { AppContext } from "./types.js";
 import { bookmarksRouter } from "./routes/bookmarks.js";
 import { searchRouter } from "./routes/search.js";
 import { topicsRouter } from "./routes/topics.js";
 import { entitiesRouter } from "./routes/entities.js";
+import { authRouter } from "./routes/auth.js";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<AppContext>();
 
 // Middleware
 app.use("*", logger());
 app.use(
   "*",
   cors({
-    origin: (origin) => origin, // TODO: Restrict in production
+    origin: (origin, c) => resolveCorsOrigin(origin, c.env.WEB_ORIGIN),
     credentials: true,
   })
 );
@@ -45,6 +46,8 @@ app.get("/api/v1", (c) => {
       "POST /api/v1/bookmarks",
       "GET /api/v1/bookmarks/:id",
       "DELETE /api/v1/bookmarks/:id",
+      "GET /api/v1/auth/me",
+      "POST /api/v1/auth/logout",
       "GET /api/v1/search",
       "GET /api/v1/topics",
       "GET /api/v1/topics/:id",
@@ -58,10 +61,37 @@ app.get("/api/v1", (c) => {
 });
 
 // Mount routes
+app.route("/api/v1/auth", authRouter);
 app.route("/api/v1/bookmarks", bookmarksRouter);
 app.route("/api/v1/search", searchRouter);
 app.route("/api/v1/topics", topicsRouter);
 app.route("/api/v1/entities", entitiesRouter);
+
+function resolveCorsOrigin(
+  origin: string | undefined,
+  configuredWebOrigin: string | undefined
+): string | undefined {
+  if (!origin) {
+    return undefined;
+  }
+
+  const allowedOrigins = new Set([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://wefts.app",
+  ]);
+
+  const trimmedConfiguredOrigin = configuredWebOrigin?.trim();
+  if (trimmedConfiguredOrigin) {
+    allowedOrigins.add(trimmedConfiguredOrigin);
+  }
+
+  if (allowedOrigins.has(origin)) {
+    return origin;
+  }
+
+  return undefined;
+}
 
 // 404 handler
 app.notFound((c) => {

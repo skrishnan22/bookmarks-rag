@@ -21,5 +21,4 @@ binding = "INGESTION_QUEUE"
 # - JINA_API_KEY        (embeddings + reranking)
 # - GOOGLE_CLIENT_ID
 # - GOOGLE_CLIENT_SECRET
-# - JWT_SECRET
 # - TMDB_API_KEY        (movie/TV enrichment)

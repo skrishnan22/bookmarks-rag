@@ -6,17 +6,17 @@ import {
   createDb,
   BookmarkRepository,
 } from "@rag-bookmarks/shared";
-import type { Env, BookmarkIngestionMessage } from "../types.js";
+import type { AppContext, BookmarkIngestionMessage } from "../types.js";
+import { requireAuth } from "../middleware/auth.js";
 
 const listBookmarksSchema = z.object({
   limit: z.coerce.number().min(1).max(100).optional().default(20),
   offset: z.coerce.number().min(0).optional().default(0),
 });
 
-// Test user ID for development (until auth is implemented)
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+const bookmarksRouter = new Hono<AppContext>();
 
-const bookmarksRouter = new Hono<{ Bindings: Env }>();
+bookmarksRouter.use("*", requireAuth);
 
 /**
  * POST /api/v1/bookmarks
@@ -37,11 +37,9 @@ bookmarksRouter.post(
   zValidator("json", createBookmarkSchema),
   async (c) => {
     const { url } = c.req.valid("json");
+    const { userId } = c.get("auth");
     const { db } = createDb(c.env.DATABASE_URL);
     const bookmarkRepo = new BookmarkRepository(db);
-
-    // TODO: Get userId from auth context when implemented
-    const userId = TEST_USER_ID;
 
     try {
       const existing = await bookmarkRepo.findByUserAndUrl(userId, url);
@@ -104,12 +102,13 @@ bookmarksRouter.post(
  */
 bookmarksRouter.get("/:id", async (c) => {
   const { id } = c.req.param();
+  const { userId } = c.get("auth");
   const { db } = createDb(c.env.DATABASE_URL);
   const bookmarkRepo = new BookmarkRepository(db);
 
   try {
     const bookmark = await bookmarkRepo.findById(id);
-    if (!bookmark) {
+    if (!bookmark || bookmark.userId !== userId) {
       return c.json(
         {
           success: false,
@@ -118,8 +117,6 @@ bookmarksRouter.get("/:id", async (c) => {
         404
       );
     }
-
-    // TODO: Check bookmark belongs to authenticated user
 
     return c.json({
       success: true,
@@ -151,11 +148,9 @@ bookmarksRouter.get(
   zValidator("query", listBookmarksSchema),
   async (c) => {
     const { limit, offset } = c.req.valid("query");
+    const { userId } = c.get("auth");
     const { db } = createDb(c.env.DATABASE_URL);
     const bookmarkRepo = new BookmarkRepository(db);
-
-    // TODO: Get userId from auth context
-    const userId = TEST_USER_ID;
 
     try {
       const bookmarks = await bookmarkRepo.listByUser(userId, limit, offset);
@@ -192,11 +187,9 @@ bookmarksRouter.get(
  */
 bookmarksRouter.delete("/:id", async (c) => {
   const { id } = c.req.param();
+  const { userId } = c.get("auth");
   const { db } = createDb(c.env.DATABASE_URL);
   const bookmarkRepo = new BookmarkRepository(db);
-
-  // TODO: Get userId from auth context when implemented
-  const userId = TEST_USER_ID;
 
   try {
     const deleted = await bookmarkRepo.delete(id, userId);

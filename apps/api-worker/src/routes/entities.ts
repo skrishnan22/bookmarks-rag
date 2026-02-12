@@ -6,9 +6,8 @@ import {
   EntityRepository,
   entityTypeEnum,
 } from "@rag-bookmarks/shared";
-import type { Env } from "../types.js";
-
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+import type { AppContext } from "../types.js";
+import { requireAuth } from "../middleware/auth.js";
 
 const listEntitiesSchema = z.object({
   type: z.enum(entityTypeEnum).optional(),
@@ -21,14 +20,16 @@ const entityBookmarksSchema = z.object({
   offset: z.coerce.number().min(0).optional().default(0),
 });
 
-const entitiesRouter = new Hono<{ Bindings: Env }>();
+const entitiesRouter = new Hono<AppContext>();
+
+entitiesRouter.use("*", requireAuth);
 
 // GET /api/v1/entities - List entities with optional type filter
 entitiesRouter.get("/", zValidator("query", listEntitiesSchema), async (c) => {
   const { type, limit, offset } = c.req.valid("query");
+  const { userId } = c.get("auth");
   const { db } = createDb(c.env.DATABASE_URL);
   const entityRepo = new EntityRepository(db);
-  const userId = TEST_USER_ID;
 
   try {
     const [entitiesWithCounts, total] = await Promise.all([
@@ -66,12 +67,13 @@ entitiesRouter.get("/", zValidator("query", listEntitiesSchema), async (c) => {
 // GET /api/v1/entities/:id - Get single entity
 entitiesRouter.get("/:id", async (c) => {
   const { id } = c.req.param();
+  const { userId } = c.get("auth");
   const { db } = createDb(c.env.DATABASE_URL);
   const entityRepo = new EntityRepository(db);
 
   try {
     const entity = await entityRepo.findById(id);
-    if (!entity) {
+    if (!entity || entity.userId !== userId) {
       return c.json(
         {
           success: false,
@@ -115,12 +117,13 @@ entitiesRouter.get(
   async (c) => {
     const { id } = c.req.param();
     const { limit, offset } = c.req.valid("query");
+    const { userId } = c.get("auth");
     const { db } = createDb(c.env.DATABASE_URL);
     const entityRepo = new EntityRepository(db);
 
     try {
       const entity = await entityRepo.findById(id);
-      if (!entity) {
+      if (!entity || entity.userId !== userId) {
         return c.json(
           {
             success: false,
