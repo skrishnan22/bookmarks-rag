@@ -9,6 +9,8 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { TabNavigation } from "~/components/layout/TabNavigation";
+import { AuthProvider } from "~/components/auth/AuthProvider";
+import { AuthGate } from "~/components/auth/AuthGate";
 
 const ONE_MINUTE_MS = 60 * 1000;
 
@@ -44,12 +46,16 @@ function RootComponent() {
   return (
     <RootDocument>
       <QueryClientProvider client={queryClient}>
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
-          <TabNavigation />
-        </div>
-        <div className="pt-20">
-          <Outlet />
-        </div>
+        <AuthProvider>
+          <AuthGate>
+            <div className="fixed top-6 left-0 right-0 z-50 px-4">
+              <TabNavigation />
+            </div>
+            <div className="pt-20">
+              <Outlet />
+            </div>
+          </AuthGate>
+        </AuthProvider>
       </QueryClientProvider>
     </RootDocument>
   );

@@ -9,28 +9,37 @@ export function TabNavigation() {
   const isEntitiesActive = location.pathname.startsWith("/entities");
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="flex items-center gap-3 p-1 pr-3 rounded-full bg-white/60 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.04)] ring-1 ring-zinc-900/5"
-    >
-      <div className="flex items-center gap-1 p-0.5">
-        <NavLink
-          to="/"
-          active={!isEntitiesActive}
-          icon={<BookMarked className="h-4 w-4" />}
-          label="Bookmarks"
-        />
-        <NavLink
-          to="/entities/books"
-          active={isEntitiesActive}
-          icon={<Layers className="h-4 w-4" />}
-          label="Collections"
-        />
-      </div>
-      <AuthStatus />
-    </motion.div>
+    <div className="flex items-center justify-between w-full max-w-2xl mx-auto px-4">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="flex items-center p-1 rounded-full bg-white/60 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.04)] ring-1 ring-zinc-900/5"
+      >
+        <div className="flex items-center gap-1 p-0.5">
+          <NavLink
+            to="/"
+            active={!isEntitiesActive}
+            icon={<BookMarked className="h-4 w-4" />}
+            label="Bookmarks"
+          />
+          <NavLink
+            to="/entities/books"
+            active={isEntitiesActive}
+            icon={<Layers className="h-4 w-4" />}
+            label="Collections"
+          />
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+      >
+        <AuthStatus />
+      </motion.div>
+    </div>
   );
 }
 

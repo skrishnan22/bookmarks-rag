@@ -26,7 +26,7 @@ app.use("*", logger());
 app.use(
   "*",
   cors({
-    origin: (origin) => origin, // TODO: Restrict in production
+    origin: (origin, c) => resolveCorsOrigin(origin, c.env.WEB_ORIGIN),
     credentials: true,
   })
 );
@@ -47,6 +47,8 @@ app.get("/api/v1", (c) => {
       "POST /api/v1/bookmarks",
       "GET /api/v1/bookmarks/:id",
       "DELETE /api/v1/bookmarks/:id",
+      "GET /api/v1/auth/me",
+      "POST /api/v1/auth/logout",
       "GET /api/v1/bookmarks/:id/images",
       "POST /api/v1/bookmarks/:id/images/:imageId/extract",
       "POST /api/v1/bookmarks/:id/images/extract-all",
@@ -76,6 +78,32 @@ app.route("/api/v1/topics", topicsRouter);
 app.use("/api/v1/entities/*", requireAuth);
 app.use("/api/v1/entities", requireAuth);
 app.route("/api/v1/entities", entitiesRouter);
+
+function resolveCorsOrigin(
+  origin: string | undefined,
+  configuredWebOrigin: string | undefined
+): string | undefined {
+  if (!origin) {
+    return undefined;
+  }
+
+  const allowedOrigins = new Set([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://wefts.app",
+  ]);
+
+  const trimmedConfiguredOrigin = configuredWebOrigin?.trim();
+  if (trimmedConfiguredOrigin) {
+    allowedOrigins.add(trimmedConfiguredOrigin);
+  }
+
+  if (allowedOrigins.has(origin)) {
+    return origin;
+  }
+
+  return undefined;
+}
 
 // 404 handler
 app.notFound((c) => {

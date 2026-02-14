@@ -11,6 +11,8 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
   TMDB_API_KEY: string;
+  AUTH_COOKIE_DOMAIN?: string;
+  WEB_ORIGIN?: string;
 
   // Queue bindings (producer only)
   INGESTION_QUEUE: Queue<BookmarkIngestionMessage>;
