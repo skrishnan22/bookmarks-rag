@@ -20,6 +20,15 @@ export interface EntityEnrichmentMessage {
   bookmarkId: string;
 }
 
+// Image entity extraction message (one per image)
+export interface ImageEntityExtractionMessage {
+  type: "image-entity-extraction";
+  imageId: string;
+  bookmarkId: string;
+  userId: string;
+}
+
 export type EntityQueueMessage =
   | EntityExtractionMessage
-  | EntityEnrichmentMessage;
+  | EntityEnrichmentMessage
+  | ImageEntityExtractionMessage;

@@ -66,6 +66,7 @@ export const bookmarks = pgTable(
     status: text("status").$type<BookmarkStatus>().default("PENDING").notNull(),
     errorMessage: text("error_message"),
     entitiesExtracted: boolean("entities_extracted").default(false).notNull(),
+    imageCount: integer("image_count").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -279,6 +280,9 @@ export const entities = pgTable(
   ]
 );
 
+export const entitySourceEnum = ["text", "image"] as const;
+export type EntitySource = (typeof entitySourceEnum)[number];
+
 export const entityBookmarks = pgTable(
   "entity_bookmarks",
   {
@@ -291,12 +295,17 @@ export const entityBookmarks = pgTable(
     contextSnippet: text("context_snippet"),
     confidence: real("confidence").notNull(),
     extractionHints: jsonb("extraction_hints").$type<ExtractionHints>(),
+    source: text("source").$type<EntitySource>().default("text").notNull(),
+    sourceImageId: uuid("source_image_id").references(() => contentImages.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.entityId, table.bookmarkId] }),
     index("entity_bookmarks_bookmark_idx").on(table.bookmarkId),
     index("entity_bookmarks_entity_idx").on(table.entityId),
+    index("entity_bookmarks_source_image_idx").on(table.sourceImageId),
   ]
 );
 
@@ -305,3 +314,79 @@ export type NewEntity = typeof entities.$inferInsert;
 
 export type EntityBookmark = typeof entityBookmarks.$inferSelect;
 export type NewEntityBookmark = typeof entityBookmarks.$inferInsert;
+
+// Content image status enum
+export const contentImageStatusEnum = [
+  "PENDING", // Extracted, not yet processed
+  "QUEUED", // Queued for processing
+  "PROCESSING", // Currently being processed
+  "COMPLETED", // Successfully processed
+  "SKIPPED", // Skipped by heuristics or user
+  "FAILED", // Processing failed
+] as const;
+
+export type ContentImageStatus = (typeof contentImageStatusEnum)[number];
+
+// Image extraction result types
+export interface ImageExtractedEntity {
+  type: "book" | "movie" | "tv_show";
+  name: string;
+  confidence: number;
+  hints?: {
+    author: string | null;
+    director: string | null;
+    year: number | null;
+  } | null;
+}
+
+export interface ImageExtractionResult {
+  entities: ImageExtractedEntity[];
+  imageDescription?: string;
+}
+
+export const contentImages = pgTable(
+  "content_images",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    bookmarkId: uuid("bookmark_id")
+      .notNull()
+      .references(() => bookmarks.id, { onDelete: "cascade" }),
+
+    // Image metadata
+    url: text("url").notNull(),
+    altText: text("alt_text"),
+    title: text("title"),
+
+    // Context for entity extraction
+    nearbyText: text("nearby_text"),
+    position: integer("position").notNull(),
+
+    // Heuristic signals
+    urlDomain: text("url_domain"),
+    estimatedType: text("estimated_type"), // 'photo', 'cover', 'icon', 'decorative', 'unknown'
+    heuristicScore: real("heuristic_score"),
+
+    // Processing state
+    status: text("status")
+      .$type<ContentImageStatus>()
+      .default("PENDING")
+      .notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    errorMessage: text("error_message"),
+
+    // Extracted data (after processing in Phase 2)
+    extractedEntities:
+      jsonb("extracted_entities").$type<ImageExtractionResult>(),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("content_images_bookmark_id_idx").on(table.bookmarkId),
+    index("content_images_status_idx").on(table.status),
+    index("content_images_heuristic_score_idx").on(table.heuristicScore),
+  ]
+);
+
+export type ContentImage = typeof contentImages.$inferSelect;
+export type NewContentImage = typeof contentImages.$inferInsert;

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  createDb,
+  createAuthedDb,
   BookmarkRepository,
   createEmbeddingProvider,
   createRerankerProvider,
@@ -10,7 +10,6 @@ import {
 import type { AppContext } from "../types.js";
 import { SearchRepository } from "../repositories/search.js";
 import { search } from "../services/search.js";
-import { requireAuth } from "../middleware/auth.js";
 
 const searchQuerySchema = z.object({
   q: z.string().min(1).max(500),
@@ -18,8 +17,6 @@ const searchQuerySchema = z.object({
 });
 
 const searchRouter = new Hono<AppContext>();
-
-searchRouter.use("*", requireAuth);
 
 /**
  * GET /api/v1/search?q=stripe+payment+integration
@@ -38,7 +35,7 @@ searchRouter.use("*", requireAuth);
 searchRouter.get("/", zValidator("query", searchQuerySchema), async (c) => {
   const { q, limit } = c.req.valid("query");
   const { userId } = c.get("auth");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const searchRepo = new SearchRepository(db);
   const bookmarkRepo = new BookmarkRepository(db);
 

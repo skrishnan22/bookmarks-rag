@@ -17,6 +17,7 @@ import { searchRouter } from "./routes/search.js";
 import { topicsRouter } from "./routes/topics.js";
 import { entitiesRouter } from "./routes/entities.js";
 import { authRouter } from "./routes/auth.js";
+import { requireAuth } from "./middleware/auth.js";
 
 const app = new Hono<AppContext>();
 
@@ -48,6 +49,10 @@ app.get("/api/v1", (c) => {
       "DELETE /api/v1/bookmarks/:id",
       "GET /api/v1/auth/me",
       "POST /api/v1/auth/logout",
+      "GET /api/v1/bookmarks/:id/images",
+      "POST /api/v1/bookmarks/:id/images/:imageId/extract",
+      "POST /api/v1/bookmarks/:id/images/extract-all",
+      "POST /api/v1/bookmarks/:id/images/:imageId/skip",
       "GET /api/v1/search",
       "GET /api/v1/topics",
       "GET /api/v1/topics/:id",
@@ -62,9 +67,16 @@ app.get("/api/v1", (c) => {
 
 // Mount routes
 app.route("/api/v1/auth", authRouter);
+app.use("/api/v1/bookmarks/*", requireAuth);
+app.use("/api/v1/bookmarks", requireAuth);
 app.route("/api/v1/bookmarks", bookmarksRouter);
+app.use("/api/v1/search", requireAuth);
 app.route("/api/v1/search", searchRouter);
+app.use("/api/v1/topics/*", requireAuth);
+app.use("/api/v1/topics", requireAuth);
 app.route("/api/v1/topics", topicsRouter);
+app.use("/api/v1/entities/*", requireAuth);
+app.use("/api/v1/entities", requireAuth);
 app.route("/api/v1/entities", entitiesRouter);
 
 function resolveCorsOrigin(

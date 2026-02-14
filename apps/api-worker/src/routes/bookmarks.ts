@@ -3,11 +3,11 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   createBookmarkSchema,
-  createDb,
+  createAuthedDb,
   BookmarkRepository,
 } from "@rag-bookmarks/shared";
 import type { AppContext, BookmarkIngestionMessage } from "../types.js";
-import { requireAuth } from "../middleware/auth.js";
+import { imagesRouter } from "./images.js";
 
 const listBookmarksSchema = z.object({
   limit: z.coerce.number().min(1).max(100).optional().default(20),
@@ -16,8 +16,6 @@ const listBookmarksSchema = z.object({
 
 const bookmarksRouter = new Hono<AppContext>();
 
-bookmarksRouter.use("*", requireAuth);
-
 /**
  * POST /api/v1/bookmarks
  *
@@ -25,6 +23,8 @@ bookmarksRouter.use("*", requireAuth);
  *
  * Request body:
  *   { url: string }
+ *   OR
+ *   { url: string, extractedContent: { title, content, contentType?, platformData? }, images: [...] }
  *
  * Response:
  *   201: { success: true, data: { id, url, status } }
@@ -36,9 +36,9 @@ bookmarksRouter.post(
   "/",
   zValidator("json", createBookmarkSchema),
   async (c) => {
-    const { url } = c.req.valid("json");
+    const { url, extractedContent, images } = c.req.valid("json");
     const { userId } = c.get("auth");
-    const { db } = createDb(c.env.DATABASE_URL);
+    const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
     const bookmarkRepo = new BookmarkRepository(db);
 
     try {
@@ -64,6 +64,33 @@ bookmarksRouter.post(
         url: bookmark.url,
         userId: bookmark.userId,
       };
+
+      if (extractedContent) {
+        message.extractedContent = {
+          title: extractedContent.title,
+          content: extractedContent.content,
+          ...(extractedContent.contentType && {
+            contentType: extractedContent.contentType,
+          }),
+          ...(extractedContent.platformData && {
+            platformData: extractedContent.platformData,
+          }),
+        };
+      }
+
+      if (images && images.length > 0) {
+        message.extractedImages = images.map((img) => ({
+          url: img.url,
+          ...(img.altText && { altText: img.altText }),
+          position: img.position,
+          ...(img.nearbyText && { nearbyText: img.nearbyText }),
+          ...(img.heuristicScore !== undefined && {
+            heuristicScore: img.heuristicScore,
+          }),
+          ...(img.estimatedType && { estimatedType: img.estimatedType }),
+        }));
+      }
+
       await c.env.INGESTION_QUEUE.send(message);
 
       console.log(`Bookmark ${bookmark.id} created and queued for processing`);
@@ -103,12 +130,12 @@ bookmarksRouter.post(
 bookmarksRouter.get("/:id", async (c) => {
   const { id } = c.req.param();
   const { userId } = c.get("auth");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const bookmarkRepo = new BookmarkRepository(db);
 
   try {
-    const bookmark = await bookmarkRepo.findById(id);
-    if (!bookmark || bookmark.userId !== userId) {
+    const bookmark = await bookmarkRepo.findByIdForUser(userId, id);
+    if (!bookmark) {
       return c.json(
         {
           success: false,
@@ -149,7 +176,7 @@ bookmarksRouter.get(
   async (c) => {
     const { limit, offset } = c.req.valid("query");
     const { userId } = c.get("auth");
-    const { db } = createDb(c.env.DATABASE_URL);
+    const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
     const bookmarkRepo = new BookmarkRepository(db);
 
     try {
@@ -188,7 +215,7 @@ bookmarksRouter.get(
 bookmarksRouter.delete("/:id", async (c) => {
   const { id } = c.req.param();
   const { userId } = c.get("auth");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const bookmarkRepo = new BookmarkRepository(db);
 
   try {
@@ -218,5 +245,8 @@ bookmarksRouter.delete("/:id", async (c) => {
     );
   }
 });
+
+// Mount images router under /:bookmarkId/images
+bookmarksRouter.route("/:bookmarkId/images", imagesRouter);
 
 export { bookmarksRouter };

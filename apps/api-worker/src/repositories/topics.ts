@@ -78,6 +78,16 @@ export class TopicRepository {
     return result[0] ?? null;
   }
 
+  async findByIdForUser(userId: string, id: string): Promise<Topic | null> {
+    const result = await this.db
+      .select()
+      .from(topics)
+      .where(and(eq(topics.id, id), eq(topics.userId, userId)))
+      .limit(1);
+
+    return result[0] ?? null;
+  }
+
   async findByUserId(userId: string): Promise<Topic[]> {
     return this.db
       .select()

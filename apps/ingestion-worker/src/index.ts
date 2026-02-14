@@ -19,13 +19,18 @@ import {
   createDb,
   BookmarkRepository,
   ChunkRepository,
+  ContentImageRepository,
   createEmbeddingProvider,
   fetchAndConvertToMarkdown,
   chunkMarkdown,
   generateEmbeddings,
+  extractImageInventory,
+  calculateHeuristicScore,
+  extractDomain,
   type Chunk,
   type BookmarkStatus,
   type EmbeddingProvider,
+  type RequestImage,
 } from "@rag-bookmarks/shared";
 
 type StepName = "fetch" | "summarize" | "chunk" | "embed";
@@ -48,12 +53,22 @@ interface PipelineContext {
   env: Env;
   bookmarkRepo: BookmarkRepository;
   chunkRepo: ChunkRepository;
+  contentImageRepo: ContentImageRepository;
   embeddingProvider: EmbeddingProvider;
 
   markdown: string | null;
   title: string | null;
   storedChunks: Chunk[];
   entitiesExtracted: boolean;
+  requestImages?: RequestImage[] | undefined;
+  extractedContent?:
+    | {
+        title: string;
+        content: string;
+        contentType?: string;
+        platformData?: Record<string, unknown>;
+      }
+    | undefined;
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -100,6 +115,16 @@ const stepExecutors: Record<StepName, (ctx: PipelineContext) => Promise<void>> =
           }
         | undefined;
 
+      // Use pre-extracted content if available (from extension/platform)
+      if (!markdown && ctx.extractedContent) {
+        markdown = ctx.extractedContent.content;
+        title = ctx.extractedContent.title;
+        console.log(
+          `Using pre-extracted content for bookmark ${ctx.bookmarkId} (${markdown?.length ?? 0} chars)`
+        );
+      }
+
+      // Fetch from URL if still no content
       if (!markdown || !title) {
         const fetched = await fetchAndConvertToMarkdown(ctx.url);
         markdown = fetched.markdown;
@@ -123,10 +148,76 @@ const stepExecutors: Record<StepName, (ctx: PipelineContext) => Promise<void>> =
         if (markdownChanged) {
           ctx.entitiesExtracted = false;
         }
+      } else if (ctx.extractedContent && !ctx.markdown) {
+        // Store pre-extracted content in bookmark record
+        await ctx.bookmarkRepo.update({
+          id: ctx.bookmarkId,
+          title,
+          markdown,
+          entitiesExtracted: false,
+        });
+        ctx.markdown = markdown;
+        ctx.title = title;
       }
 
       if (!markdown || !title) {
         throw new Error("Missing markdown or title after fetch step");
+      }
+
+      // Image extraction - delete existing and re-extract
+      await ctx.contentImageRepo.deleteByBookmarkId(ctx.bookmarkId);
+
+      // Extract images - prefer request-provided images over markdown extraction
+      const extractedImages = extractImageInventory({
+        markdown,
+        requestImages: ctx.requestImages,
+      });
+
+      // Store images with heuristic scores
+      if (extractedImages.length > 0) {
+        const imageRecords = extractedImages.map((img) => {
+          const heuristics = calculateHeuristicScore(img);
+          return {
+            bookmarkId: ctx.bookmarkId,
+            url: img.url,
+            altText: img.altText,
+            title: img.title,
+            nearbyText: img.nearbyText,
+            position: img.position,
+            urlDomain: extractDomain(img.url),
+            estimatedType: heuristics.estimatedType,
+            heuristicScore: heuristics.score,
+          };
+        });
+
+        const insertedImages =
+          await ctx.contentImageRepo.createMany(imageRecords);
+
+        // Update bookmark with image count
+        await ctx.bookmarkRepo.update({
+          id: ctx.bookmarkId,
+          imageCount: insertedImages.length,
+        });
+
+        // Queue one message per image for entity extraction (Phase 2)
+        // Only queue images with score > 0 (skip decorative images)
+        const imagesToQueue = insertedImages.filter(
+          (img) => (img.heuristicScore ?? 0) > 0
+        );
+
+        for (const image of insertedImages) {
+          console.log("messag for image", image.url);
+          await ctx.env.ENTITY_QUEUE.send({
+            type: "image-entity-extraction",
+            imageId: image.id,
+            bookmarkId: ctx.bookmarkId,
+            userId: ctx.userId,
+          });
+        }
+
+        console.log(
+          `Bookmark ${ctx.bookmarkId}: Extracted ${insertedImages.length} images, queued ${imagesToQueue.length} for processing`
+        );
       }
 
       const shouldEnqueueEntities = !ctx.entitiesExtracted;
@@ -250,9 +341,11 @@ async function handleIngestionMessage(
   message: BookmarkIngestionMessage,
   env: Env,
   bookmarkRepo: BookmarkRepository,
-  chunkRepo: ChunkRepository
+  chunkRepo: ChunkRepository,
+  contentImageRepo: ContentImageRepository
 ): Promise<void> {
-  const { bookmarkId, url, userId } = message;
+  const { bookmarkId, url, userId, extractedContent, extractedImages } =
+    message;
   console.log(`Processing bookmark ${bookmarkId}: ${url}`);
 
   try {
@@ -271,6 +364,16 @@ async function handleIngestionMessage(
 
     const existingChunks = await chunkRepo.findByBookmarkId(bookmarkId);
 
+    // Convert extracted images to RequestImage format
+    const requestImages: RequestImage[] | undefined = extractedImages?.map(
+      (img) => ({
+        url: img.url,
+        altText: img.altText,
+        nearbyText: img.nearbyText,
+        position: img.position,
+      })
+    );
+
     const ctx: PipelineContext = {
       bookmarkId,
       url,
@@ -278,6 +381,7 @@ async function handleIngestionMessage(
       env,
       bookmarkRepo,
       chunkRepo,
+      contentImageRepo,
       embeddingProvider: createEmbeddingProvider(
         "jina",
         env.JINA_API_KEY,
@@ -288,6 +392,8 @@ async function handleIngestionMessage(
       title: bookmark.title,
       storedChunks: existingChunks,
       entitiesExtracted: bookmark.entitiesExtracted,
+      requestImages,
+      extractedContent,
     };
 
     const startIdx = PIPELINE.findIndex(
@@ -349,6 +455,7 @@ export default {
     const { db, close } = createDb(env.DATABASE_URL);
     const bookmarkRepo = new BookmarkRepository(db);
     const chunkRepo = new ChunkRepository(db);
+    const contentImageRepo = new ContentImageRepository(db);
 
     const limit = pLimit(parsePositiveInt(env.QUEUE_CONCURRENCY, 2));
     const baseDelaySeconds = parsePositiveInt(env.RETRY_BASE_DELAY_SECONDS, 2);
@@ -364,7 +471,8 @@ export default {
                 message.body,
                 env,
                 bookmarkRepo,
-                chunkRepo
+                chunkRepo,
+                contentImageRepo
               );
               message.ack();
             } catch (error) {

@@ -1,7 +1,26 @@
 import { z } from "zod";
 
+export const extractedContentSchema = z.object({
+  url: z.string().url(),
+  title: z.string(),
+  content: z.string(),
+  contentType: z.string().optional(),
+  platformData: z.record(z.unknown()).optional(),
+});
+
+export const requestImageSchema = z.object({
+  url: z.string().url(),
+  altText: z.string().optional(),
+  position: z.number().int().min(0),
+  nearbyText: z.string().optional(),
+  heuristicScore: z.number().min(0).max(1).optional(),
+  estimatedType: z.string().optional(),
+});
+
 export const createBookmarkSchema = z.object({
   url: z.string().url("Invalid URL format"),
+  extractedContent: extractedContentSchema.optional(),
+  images: z.array(requestImageSchema).optional(),
 });
 
 export const bookmarkIdSchema = z.object({

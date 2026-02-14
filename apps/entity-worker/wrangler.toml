@@ -23,5 +23,5 @@ binding = "ENTITY_QUEUE"
 
 # Secrets (set via wrangler secret put):
 # - DATABASE_URL
-# - OPENROUTER_API_KEY  (LLM for entity extraction and disambiguation)
+# - OPENROUTER_API_KEY  (LLM for entity extraction, disambiguation, and vision)
 # - TMDB_API_KEY        (movie/TV enrichment)

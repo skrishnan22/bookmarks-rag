@@ -1,3 +1,4 @@
+import type { ModelMessage } from "ai";
 import type { z } from "zod";
 
 /**
@@ -25,10 +26,12 @@ export interface LLMOptions {
   stopSequences?: string[];
 }
 
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
+export type ChatMessage = ModelMessage;
+
+export type MessageContent = Extract<ModelMessage, { role: "user" }>["content"];
+
+export type MessageContentPart =
+  MessageContent extends Array<infer Part> ? Part : never;
 
 export interface RerankDocument {
   id: string;

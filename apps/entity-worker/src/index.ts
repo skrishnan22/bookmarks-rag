@@ -5,13 +5,19 @@ import type {
   EntityQueueMessage,
   EntityExtractionMessage,
   EntityEnrichmentMessage,
+  ImageEntityExtractionMessage,
 } from "./types.js";
+import type { Database } from "@rag-bookmarks/shared";
+
 import {
   createDb,
   BookmarkRepository,
   EntityRepository,
+  ContentImageRepository,
   createLLMProvider,
   extractSummaryAndEntities,
+  extractEntitiesFromImage,
+  mergeImageEntities,
   normalizeEntityName,
   EntityEnrichmentService,
   OpenLibraryProvider,
@@ -139,6 +145,108 @@ async function handleEntityEnrichment(
   console.log(`[enrichment] Bookmark ${bookmarkId}: Complete`);
 }
 
+// Image entity extraction handler
+async function handleImageEntityExtraction(
+  message: ImageEntityExtractionMessage,
+  env: Env,
+  contentImageRepo: ContentImageRepository,
+  db: Database
+): Promise<boolean> {
+  const { imageId, bookmarkId, userId } = message;
+  const hasApiKey = Boolean(env.OPENROUTER_API_KEY);
+
+  if (!hasApiKey) {
+    await contentImageRepo.update({
+      id: imageId,
+      status: "FAILED",
+      errorMessage: "Missing OPENROUTER_API_KEY",
+    });
+    console.warn(`[image-extraction] Image ${imageId}: Missing API key`);
+    return false;
+  }
+  console.log(`[image-extraction] Image ${imageId}: Starting`);
+
+  const image = await contentImageRepo.findById(imageId);
+  if (!image) {
+    console.log(`[image-extraction] Image ${imageId}: Not found, skipping`);
+    return false;
+  }
+
+  if (image.status === "COMPLETED" || image.status === "SKIPPED") {
+    console.log(
+      `[image-extraction] Image ${imageId}: Status is ${image.status}, skipping`
+    );
+    return false;
+  }
+
+  if (image.status === "PROCESSING") {
+    console.log(`[image-extraction] Image ${imageId}: Already processing`);
+    return false;
+  }
+
+  await contentImageRepo.update({
+    id: imageId,
+    status: "PROCESSING",
+  });
+
+  try {
+    const extracted = await extractEntitiesFromImage(
+      image.url,
+      {
+        nearbyText: image.nearbyText ?? undefined,
+        altText: image.altText ?? undefined,
+      },
+      env.OPENROUTER_API_KEY!
+    );
+
+    const contextSnippet = image.nearbyText ?? image.altText ?? undefined;
+
+    const mergeResult = await mergeImageEntities({
+      db,
+      userId,
+      bookmarkId,
+      imageId,
+      extractedEntities: extracted.entities,
+      contextSnippet,
+    });
+
+    await contentImageRepo.update({
+      id: imageId,
+      status: "COMPLETED",
+      processedAt: new Date(),
+      extractedEntities: extracted,
+    });
+
+    if (mergeResult.created > 0) {
+      await env.ENTITY_QUEUE.send({
+        type: "entity-enrichment",
+        userId,
+        bookmarkId,
+      });
+    }
+
+    console.log(
+      `[image-extraction] Image ${imageId}: ` +
+        `Extracted ${extracted.entities.length} entities, ` +
+        `created ${mergeResult.created}, linked ${mergeResult.linked}`
+    );
+
+    return mergeResult.created > 0;
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+
+    await contentImageRepo.update({
+      id: imageId,
+      status: "FAILED",
+      errorMessage,
+    });
+
+    console.error(`[image-extraction] Image ${imageId}: Failed`, error);
+    throw error;
+  }
+}
+
 export default {
   async queue(
     batch: MessageBatch<EntityQueueMessage>,
@@ -149,6 +257,7 @@ export default {
     const { db, close } = createDb(env.DATABASE_URL);
     const bookmarkRepo = new BookmarkRepository(db);
     const entityRepo = new EntityRepository(db);
+    const contentImageRepo = new ContentImageRepository(db);
 
     const limit = pLimit(2); //TODO=>move this to worker config
 
@@ -178,6 +287,13 @@ export default {
                 }
               } else if (msg.type === "entity-enrichment") {
                 await handleEntityEnrichment(msg, env, entityRepo);
+              } else if (msg.type === "image-entity-extraction") {
+                await handleImageEntityExtraction(
+                  msg,
+                  env,
+                  contentImageRepo,
+                  db
+                );
               }
 
               message.ack();

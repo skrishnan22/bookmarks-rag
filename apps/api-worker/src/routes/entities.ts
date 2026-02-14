@@ -2,12 +2,11 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  createDb,
+  createAuthedDb,
   EntityRepository,
   entityTypeEnum,
 } from "@rag-bookmarks/shared";
 import type { AppContext } from "../types.js";
-import { requireAuth } from "../middleware/auth.js";
 
 const listEntitiesSchema = z.object({
   type: z.enum(entityTypeEnum).optional(),
@@ -22,13 +21,11 @@ const entityBookmarksSchema = z.object({
 
 const entitiesRouter = new Hono<AppContext>();
 
-entitiesRouter.use("*", requireAuth);
-
 // GET /api/v1/entities - List entities with optional type filter
 entitiesRouter.get("/", zValidator("query", listEntitiesSchema), async (c) => {
   const { type, limit, offset } = c.req.valid("query");
   const { userId } = c.get("auth");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const entityRepo = new EntityRepository(db);
 
   try {
@@ -68,12 +65,12 @@ entitiesRouter.get("/", zValidator("query", listEntitiesSchema), async (c) => {
 entitiesRouter.get("/:id", async (c) => {
   const { id } = c.req.param();
   const { userId } = c.get("auth");
-  const { db } = createDb(c.env.DATABASE_URL);
+  const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
   const entityRepo = new EntityRepository(db);
 
   try {
-    const entity = await entityRepo.findById(id);
-    if (!entity || entity.userId !== userId) {
+    const entity = await entityRepo.findByIdForUser(userId, id);
+    if (!entity) {
       return c.json(
         {
           success: false,
@@ -118,12 +115,12 @@ entitiesRouter.get(
     const { id } = c.req.param();
     const { limit, offset } = c.req.valid("query");
     const { userId } = c.get("auth");
-    const { db } = createDb(c.env.DATABASE_URL);
+    const { db } = await createAuthedDb(c.env.DATABASE_URL, userId);
     const entityRepo = new EntityRepository(db);
 
     try {
-      const entity = await entityRepo.findById(id);
-      if (!entity || entity.userId !== userId) {
+      const entity = await entityRepo.findByIdForUser(userId, id);
+      if (!entity) {
         return c.json(
           {
             success: false,
@@ -134,8 +131,8 @@ entitiesRouter.get(
       }
 
       const [entityBookmarks, total] = await Promise.all([
-        entityRepo.getBookmarksForEntity(id, limit, offset),
-        entityRepo.countBookmarksForEntity(id),
+        entityRepo.getBookmarksForEntityForUser(userId, id, limit, offset),
+        entityRepo.countBookmarksForEntityForUser(userId, id),
       ]);
 
       return c.json({
