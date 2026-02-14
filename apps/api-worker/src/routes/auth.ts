@@ -12,6 +12,56 @@ import type { AppContext } from "../types.js";
 
 const authRouter = new Hono<AppContext>();
 
+authRouter.get("/login/google", async (c) => {
+  if (!c.env.SUPABASE_URL || !c.env.SUPABASE_ANON_KEY) {
+    return c.redirect("/?error=auth_not_configured");
+  }
+
+  if (!c.env.WEB_ORIGIN) {
+    return c.redirect("/?error=web_origin_not_configured");
+  }
+
+  const supabase = createSupabaseServerClient(c);
+  const redirectTo = `${c.env.WEB_ORIGIN}/api/v1/auth/callback`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      scopes: "email profile",
+    },
+  });
+
+  if (error || !data.url) {
+    console.error("OAuth sign in error:", error);
+    return c.redirect("/?error=oauth_failed");
+  }
+
+  return c.redirect(data.url);
+});
+
+authRouter.get("/callback", async (c) => {
+  if (!c.env.SUPABASE_URL || !c.env.SUPABASE_ANON_KEY) {
+    return c.redirect("/?error=auth_not_configured");
+  }
+
+  const code = c.req.query("code");
+  if (!code) {
+    return c.redirect("/?error=missing_code");
+  }
+
+  const supabase = createSupabaseServerClient(c);
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (error) {
+    console.error("OAuth callback error:", error);
+    return c.redirect("/?error=callback_failed");
+  }
+
+  return c.redirect("/");
+});
+
 authRouter.get("/me", async (c) => {
   if (!c.env.SUPABASE_URL || !c.env.SUPABASE_ANON_KEY) {
     return c.json(
