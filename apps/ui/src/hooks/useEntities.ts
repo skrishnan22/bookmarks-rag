@@ -7,6 +7,8 @@ import {
   type EntityBookmark,
 } from "~/lib/api";
 
+const FIVE_MINUTES = 5 * 60 * 1000;
+
 export function useEntities(type?: EntityType) {
   return useQuery({
     queryKey: ["entities", type],
@@ -20,6 +22,9 @@ export function useEntities(type?: EntityType) {
         total: response.data.total,
       };
     },
+    staleTime: FIVE_MINUTES,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 }
 
@@ -39,6 +44,8 @@ export function useEntityBookmarks(entityId: string | null, enabled: boolean) {
       };
     },
     enabled: enabled && !!entityId,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 }
 

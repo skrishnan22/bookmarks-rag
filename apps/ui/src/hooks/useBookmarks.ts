@@ -1,8 +1,14 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   getBookmarks,
   searchBookmarks,
   deleteBookmark,
+  createBookmark,
   type Bookmark,
   type SearchResult,
 } from "~/lib/api";
@@ -56,6 +62,8 @@ export function useDeleteBookmark() {
 
   return useMutation({
     mutationFn: deleteBookmark,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     onMutate: async (id: string) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: ["bookmarks"] });
@@ -90,6 +98,20 @@ export function useDeleteBookmark() {
       // Invalidate to refetch
       queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
       queryClient.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
+}
+
+export function useCreateBookmark() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createBookmark,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    onSuccess: () => {
+      // Invalidate and refetch bookmarks list
+      queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
     },
   });
 }

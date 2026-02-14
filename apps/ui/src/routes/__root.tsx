@@ -48,7 +48,7 @@ function RootComponent() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <AuthGate>
-            <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
+            <div className="fixed top-6 left-0 right-0 z-50 px-4">
               <TabNavigation />
             </div>
             <div className="pt-20">

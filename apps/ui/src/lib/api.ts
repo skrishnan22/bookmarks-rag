@@ -1,3 +1,48 @@
+// Auth types
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+export interface AuthMeResponse {
+  success: boolean;
+  data?: { user: AuthUser };
+  error?: { code: string; message: string };
+}
+
+export interface LogoutResponse {
+  success: boolean;
+}
+
+// Auth API functions
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  const response = await apiFetch("/api/v1/auth/me");
+
+  if (response.status === 401) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Auth bootstrap failed with status ${response.status}`);
+  }
+
+  const payload = (await response.json()) as AuthMeResponse;
+  if (!payload.success) {
+    throw new Error(payload.error?.message || "Auth failed");
+  }
+
+  return payload.data?.user ?? null;
+}
+
+export async function logout(): Promise<void> {
+  await apiFetch("/api/v1/auth/logout", {
+    method: "POST",
+  });
+}
+
+// Bookmark types
 export interface Bookmark {
   id: string;
   url: string;
@@ -75,6 +120,29 @@ export async function deleteBookmark(
 ): Promise<DeleteBookmarkResponse> {
   const response = await apiFetch(`/api/v1/bookmarks/${id}`, {
     method: "DELETE",
+  });
+  return response.json();
+}
+
+export interface CreateBookmarkResponse {
+  success: boolean;
+  data?: {
+    id: string;
+    url: string;
+    status: string;
+  };
+  error?: { code: string; message: string };
+}
+
+export async function createBookmark(
+  url: string
+): Promise<CreateBookmarkResponse> {
+  const response = await apiFetch("/api/v1/bookmarks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url }),
   });
   return response.json();
 }
