@@ -1,130 +1,84 @@
 import type { ReactNode } from "react";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "~/lib/supabase";
+import { createContext, useCallback, useContext, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchCurrentUser, logout, type AuthUser } from "~/lib/api";
 
 interface AuthContextValue {
-  session: Session | null;
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  error: string | null;
+  retryAuth: () => Promise<void>;
+  signInWithGoogle: () => void;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AUTH_BOOTSTRAP_ERROR = "We couldn't verify your session. Please retry.";
+const AUTH_ME_QUERY_KEY = ["auth", "me"] as const;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const queryClient = useQueryClient();
 
-  const syncSession = useCallback(async (nextSession: Session | null) => {
-    if (!nextSession?.access_token) {
-      return;
-    }
+  const {
+    data: user,
+    isLoading,
+    isFetching,
+    error: authError,
+    refetch,
+  } = useQuery<AuthUser | null, Error>({
+    queryKey: AUTH_ME_QUERY_KEY,
+    queryFn: fetchCurrentUser,
+    retry: false,
+  });
 
-    const response = await fetch("/api/v1/auth/session", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accessToken: nextSession.access_token }),
+  const clearAppQueries = useCallback(async () => {
+    await queryClient.cancelQueries({
+      predicate: (query) => query.queryKey[0] !== "auth",
     });
-
-    if (!response.ok) {
-      console.error("Failed to sync session", await response.text());
-    }
-  }, []);
-
-  const clearSession = useCallback(async () => {
-    await fetch("/api/v1/auth/logout", {
-      method: "POST",
-      credentials: "include",
+    queryClient.removeQueries({
+      predicate: (query) => query.queryKey[0] !== "auth",
     });
-  }, []);
+  }, [queryClient]);
 
-  useEffect(() => {
-    let active = true;
+  const retryAuth = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
-    supabase.auth
-      .getSession()
-      .then(async ({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          console.error("Failed to load session", error);
-        }
-        setSession(data.session ?? null);
-        if (data.session) {
-          setSyncing(true);
-          try {
-            await syncSession(data.session);
-          } finally {
-            setSyncing(false);
-          }
-        }
-        setLoading(false);
-      })
-      .catch((error) => {
-        if (!active) return;
-        console.error("Failed to load session", error);
-        setLoading(false);
-      });
-
-    const { data: subscription } = supabase.auth.onAuthStateChange(
-      async (event, nextSession) => {
-        setSession(nextSession);
-        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-          setSyncing(true);
-          try {
-            await syncSession(nextSession);
-          } finally {
-            setSyncing(false);
-          }
-        }
-        if (event === "SIGNED_OUT") {
-          await clearSession();
-        }
-      }
-    );
-
-    return () => {
-      active = false;
-      subscription?.subscription.unsubscribe();
-    };
-  }, [clearSession, syncSession]);
-
-  const signInWithGoogle = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) {
-      console.error("Google sign-in failed", error);
-    }
+  const signInWithGoogle = useCallback(() => {
+    window.location.href = "/api/v1/auth/login/google";
   }, []);
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Sign out failed", error);
+    queryClient.setQueryData<AuthUser | null>(AUTH_ME_QUERY_KEY, null);
+    await clearAppQueries();
+
+    try {
+      await logout();
+    } catch (requestError) {
+      console.error("Failed to clear backend session", requestError);
     }
-  }, []);
+
+    await queryClient.invalidateQueries({ queryKey: AUTH_ME_QUERY_KEY });
+  }, [clearAppQueries, queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      session,
-      user: session?.user ?? null,
-      loading: loading || syncing,
+      user: user ?? null,
+      loading: isLoading || (isFetching && !user && !authError),
+      error: !user && authError ? AUTH_BOOTSTRAP_ERROR : null,
+      retryAuth,
       signInWithGoogle,
       signOut,
     }),
-    [loading, session, signInWithGoogle, signOut]
+    [
+      authError,
+      isFetching,
+      isLoading,
+      retryAuth,
+      signInWithGoogle,
+      signOut,
+      user,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

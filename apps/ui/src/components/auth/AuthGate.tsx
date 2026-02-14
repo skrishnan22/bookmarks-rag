@@ -4,7 +4,7 @@ import { useAuth } from "./AuthProvider";
 import { Button } from "~/components/ui/button";
 
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { loading, session } = useAuth();
+  const { loading, user, error, retryAuth } = useAuth();
 
   if (loading) {
     return (
@@ -16,11 +16,39 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!session) {
+  if (error && !user) {
+    return <AuthErrorScreen message={error} onRetry={retryAuth} />;
+  }
+
+  if (!user) {
     return <LoginScreen />;
   }
 
   return <>{children}</>;
+}
+
+function AuthErrorScreen({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => Promise<void>;
+}) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="max-w-md w-full space-y-4 text-center">
+        <p className="text-sm font-medium text-zinc-600">{message}</p>
+        <Button
+          className="w-full"
+          onClick={() => {
+            void onRetry();
+          }}
+        >
+          Retry
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function LoginScreen() {
