@@ -8,6 +8,9 @@
     "build": "vite build",
     "clean": "rm -rf extn"
   },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.2"
+  },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
     "@types/node": "^22.10.7",

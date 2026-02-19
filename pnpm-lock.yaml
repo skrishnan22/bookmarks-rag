@@ -41,6 +41,12 @@ importers:
       '@rag-bookmarks/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@supabase/ssr':
+        specifier: ^0.8.0
+        version: 0.8.0(@supabase/supabase-js@2.91.1)
+      '@supabase/supabase-js':
+        specifier: ^2.57.2
+        version: 2.91.1
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@cloudflare/workers-types@4.20251231.0)(@opentelemetry/api@1.9.0)(postgres@3.4.7)
@@ -77,6 +83,10 @@ importers:
         version: 4.54.0(@cloudflare/workers-types@4.20251231.0)
 
   apps/chrome-extension:
+    dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.57.2
+        version: 2.91.1
     devDependencies:
       '@types/chrome':
         specifier: ^0.0.287
@@ -149,9 +159,6 @@ importers:
       '@rag-bookmarks/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@supabase/supabase-js':
-        specifier: ^2.57.2
-        version: 2.91.1
       '@tanstack/react-query':
         specifier: ^5.62.0
         version: 5.90.16(react@19.2.3)
@@ -1742,6 +1749,11 @@ packages:
   '@supabase/realtime-js@2.91.1':
     resolution: {integrity: sha512-Y4rifuvzekFgd2hUfiEvcMoh/JU3s1hmpWYS7tNGL2QHuFfWg8a4w/qg5qoSMVDvgGRz6G4L6yB1FaQRTplENQ==}
     engines: {node: '>=20.0.0'}
+
+  '@supabase/ssr@0.8.0':
+    resolution: {integrity: sha512-/PKk8kNFSs8QvvJ2vOww1mF5/c5W8y42duYtXvkOSe+yZKRgTTZywYG2l41pjhNomqESZCpZtXuWmYjFRMV+dw==}
+    peerDependencies:
+      '@supabase/supabase-js': ^2.76.1
 
   '@supabase/storage-js@2.91.1':
     resolution: {integrity: sha512-hMJNT2tSleOrWwx4FmHTpihIA2PRDixAsWflECuQ4YDkeduBZGX5m2txnstMnteWW+H+mm+92WRRFLuidXqbfA==}
@@ -5390,6 +5402,11 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  '@supabase/ssr@0.8.0(@supabase/supabase-js@2.91.1)':
+    dependencies:
+      '@supabase/supabase-js': 2.91.1
+      cookie: 1.1.1
 
   '@supabase/storage-js@2.91.1':
     dependencies:

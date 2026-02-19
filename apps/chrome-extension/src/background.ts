@@ -1,4 +1,5 @@
 import { API_BASE_URL, STORAGE_KEYS } from "./constants";
+import { getAccessToken } from "./auth";
 import type { BookmarkContentData } from "./extractors/types";
 
 let autoSyncEnabled = false;
@@ -98,9 +99,6 @@ async function extractContentFromTab(
   }
 }
 
-/**
- * Send bookmark to API with optional extracted content
- */
 async function sendBookmarkToApi(
   url: string,
   extractedContent?: BookmarkContentData | null
@@ -111,11 +109,18 @@ async function sendBookmarkToApi(
     body.extractedContent = extractedContent;
   }
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  const accessToken = await getAccessToken();
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
+
   const response = await fetch(`${API_BASE_URL}/bookmarks`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
