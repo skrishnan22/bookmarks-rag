@@ -49,6 +49,14 @@ export const bookmarkStatusEnum = [
 
 export type BookmarkStatus = (typeof bookmarkStatusEnum)[number];
 
+export interface BookmarkInsights {
+  mainClaims: string[];
+  keyQuotes: string[];
+  uniqueAngle: string | null;
+  topics: string[];
+  extractedAt: string;
+}
+
 export const bookmarks = pgTable(
   "bookmarks",
   {
@@ -67,6 +75,7 @@ export const bookmarks = pgTable(
     errorMessage: text("error_message"),
     entitiesExtracted: boolean("entities_extracted").default(false).notNull(),
     imageCount: integer("image_count").default(0).notNull(),
+    insights: jsonb("insights").$type<BookmarkInsights>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

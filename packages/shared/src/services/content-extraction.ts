@@ -22,13 +22,23 @@ const extractedEntitySchema = z.object({
 const contentExtractionResponseSchema = z.object({
   summary: z.string(),
   entities: z.array(extractedEntitySchema),
+  insights: z.object({
+    mainClaims: z.array(z.string()).max(3),
+    keyQuotes: z.array(z.string()).max(2),
+    uniqueAngle: z.string().nullable(),
+    topics: z.array(z.string()).max(5),
+  }),
 });
 
 export type ExtractedEntity = z.infer<typeof extractedEntitySchema>;
+export type ExtractedInsights = z.infer<
+  typeof contentExtractionResponseSchema
+>["insights"];
 
 export interface ContentExtractionResult {
   summary: string;
   entities: ExtractedEntity[];
+  insights: ExtractedInsights;
 }
 
 const SYSTEM_PROMPT = `You are a content analysis assistant. Analyze the provided webpage and:
@@ -62,6 +72,12 @@ If an entity could be both book and movie (e.g., "Dune"), extract as the type mo
    - language: Original language if mentioned, or null
 
 Only extract hints that are explicitly stated in the content. Use null for fields not mentioned. Do not guess or infer.
+
+4. INSIGHTS: Extract key insights from the content:
+   - mainClaims: 2-3 core assertions or main points made by the author (as strings)
+   - keyQuotes: 1-2 notable or memorable quotes from the content, under 50 words each
+   - uniqueAngle: A one-sentence description of what's novel or unique about this content's perspective (or null if generic)
+   - topics: 3-5 key concepts, technologies, or themes discussed
 
 Return empty entities array if no qualifying entities found.`;
 
@@ -102,7 +118,16 @@ export async function extractSummaryAndEntities(
   llmProvider: LLMProvider
 ): Promise<ContentExtractionResult> {
   if (!markdown || markdown.trim().length < 100) {
-    return { summary: "", entities: [] };
+    return {
+      summary: "",
+      entities: [],
+      insights: {
+        mainClaims: [],
+        keyQuotes: [],
+        uniqueAngle: null,
+        topics: [],
+      },
+    };
   }
 
   const result = await llmProvider.generateObject(
@@ -121,5 +146,6 @@ export async function extractSummaryAndEntities(
   return {
     summary: result.summary.trim(),
     entities: dedupeEntities(filteredEntities),
+    insights: result.insights,
   };
 }
