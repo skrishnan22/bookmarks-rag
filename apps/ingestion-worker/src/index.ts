@@ -205,7 +205,7 @@ const stepExecutors: Record<StepName, (ctx: PipelineContext) => Promise<void>> =
           (img) => (img.heuristicScore ?? 0) > 0
         );
 
-        for (const image of insertedImages) {
+        for (const image of imagesToQueue) {
           console.log("messag for image", image.url);
           await ctx.env.ENTITY_QUEUE.send({
             type: "image-entity-extraction",

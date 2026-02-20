@@ -4,7 +4,7 @@ export interface BatchBookmarkInput {
   id: string;
   title: string;
   url: string;
-  insights: BookmarkInsights;
+  insights: BookmarkInsights | null;
   matchedChunks: string[];
 }
 
@@ -18,8 +18,9 @@ For each batch of bookmarks, extract:
    For each theme:
    - theme: A short, descriptive name (2-4 words)
    - description: 1-2 sentences explaining the theme
-   - supportingEvidence: 1-2 direct quotes or specific claims from the bookmarks (under 30 words each)
+   - supportingEvidence: 1-2 direct quotes or specific claims, each prefixed with the bookmark number, e.g. "[2] LLMs work best with structured prompts"
    - confidence: 0.0-1.0 score based on how clearly the theme emerges
+   - relatedBookmarkIndices: Array of integers (the [N] numbers) for bookmarks that contribute to this theme
 
 2. CONFLICTS: Identify any disagreements, debates, or contradictory viewpoints between bookmarks on the same topic.
    For each conflict:
@@ -35,7 +36,7 @@ For each batch of bookmarks, extract:
 Guidelines:
 - Focus only on content relevant to the user's query
 - Always reference bookmarks by their [N] number — never by title or URL
-- supportingEvidence should be direct quotes where possible, not paraphrases
+- supportingEvidence should be direct quotes where possible, prefixed with [N], not paraphrases
 - Confidence scores should reflect certainty, not importance
 - Return empty arrays if no themes/conflicts/patterns are found`;
 

@@ -31,7 +31,7 @@ Produce:
    - id: A kebab-case identifier (e.g., "ai-agent-definition")
    - type: One of the types above
    - title: Clear, descriptive heading (5-8 words)
-   - content: 2-4 paragraphs of synthesized information drawing on the evidence in the extractions
+   - content: 2-4 paragraphs of synthesized information drawing on the evidence in the extractions. Use inline citations like [1], [3] within the prose to attribute specific claims to their source bookmarks.
    - sourceBookmarkIndices: Array of integers (the [N] numbers from the "All bookmarks" list) that support this section (minimum 1, ideally 2-4)
 
 2. DEEP DIVES (3-5): Recommend specific bookmarks for deeper reading.
@@ -49,6 +49,7 @@ Guidelines:
 - Prioritize synthesis over summarization — don't just list what each source says
 - Explicitly connect ideas across sources using the supporting evidence provided
 - Always reference bookmarks by their [N] number — never by UUID, title, or URL
+- Use inline [N] citations in the content text to attribute specific claims (e.g., "Agents benefit from tool use [2] and structured planning [5]")
 - Each section must reference at least one bookmark number
 - Aim for section type variety — avoid producing only core_concept and consensus sections
 - The synthesis should be comprehensive yet digestible`;
@@ -95,10 +96,11 @@ function buildReducePhasePrompt(
     .join("\n");
 
   // Helper: convert a UUID to its [N] label for human-readable context
-  const idToLabel = (id: string): string => {
-    const idx = orderedBookmarkIds.indexOf(id);
-    return idx >= 0 ? `[${idx + 1}]` : "[?]";
-  };
+  const idToLabelMap = new Map<string, string>();
+  orderedBookmarkIds.forEach((id, idx) => {
+    idToLabelMap.set(id, `[${idx + 1}]`);
+  });
+  const idToLabel = (id: string): string => idToLabelMap.get(id) ?? "[?]";
 
   const extractionSummaries = extractions
     .map((extraction, idx) => {
@@ -108,7 +110,11 @@ function buildReducePhasePrompt(
             t.supportingEvidence.length > 0
               ? `\n      Evidence: ${t.supportingEvidence.join(" | ")}`
               : "";
-          return `    - "${t.theme}" (confidence: ${t.confidence.toFixed(2)})${evidence}`;
+          const sources =
+            t.relatedBookmarkIds.length > 0
+              ? ` (sources: ${t.relatedBookmarkIds.map(idToLabel).join(", ")})`
+              : "";
+          return `    - "${t.theme}" (confidence: ${t.confidence.toFixed(2)})${sources}${evidence}`;
         })
         .join("\n");
 
@@ -184,7 +190,7 @@ export async function synthesizeFromExtractions(
       },
     ],
     reducePhaseResponseSchema,
-    { temperature: 0.4, maxTokens: 6000 }
+    { temperature: 0.4, maxTokens: 10000 }
   );
 
   // Deterministically remap 1-based indices to real bookmark UUIDs
@@ -199,7 +205,15 @@ export async function synthesizeFromExtractions(
       title: section.title,
       content: section.content,
       sourceBookmarkIds: section.sourceBookmarkIndices
-        .map(indexToId)
+        .map((i) => {
+          const id = indexToId(i);
+          if (!id) {
+            console.warn(
+              `[synthesis:reduce] Invalid bookmark index ${i} in section "${section.id}" (total bookmarks: ${orderedBookmarkIds.length})`
+            );
+          }
+          return id;
+        })
         .filter((id): id is string => id !== null),
     }))
     .filter((section) => {
@@ -215,7 +229,12 @@ export async function synthesizeFromExtractions(
   const deepDives: DeepDive[] = result.deepDives
     .map((dd) => {
       const id = indexToId(dd.bookmarkIndex);
-      if (!id) return null;
+      if (!id) {
+        console.warn(
+          `[synthesis:reduce] Invalid bookmark index ${dd.bookmarkIndex} in deepDive (total bookmarks: ${orderedBookmarkIds.length})`
+        );
+        return null;
+      }
       const meta = bookmarksMeta.get(id)!;
       return {
         bookmarkId: id,

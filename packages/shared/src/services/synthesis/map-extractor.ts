@@ -14,7 +14,8 @@ const mapExtractionResponseSchema = z.object({
       theme: z.string(),
       description: z.string(),
       supportingEvidence: z.array(z.string()),
-      confidence: z.number().min(0).max(1),
+      confidence: z.number(),
+      relatedBookmarkIndices: z.array(z.number().int()),
     })
   ),
   conflicts: z.array(
@@ -65,7 +66,7 @@ export async function extractInsightsFromBatch(
       { role: "user", content: buildMapPhasePrompt(bookmarks, query) },
     ],
     mapExtractionResponseSchema,
-    { temperature: 0.3, maxTokens: 4000 }
+    { temperature: 0.3, maxTokens: 10000 }
   );
 
   // Deterministically remap 1-based indices to real bookmark UUIDs
@@ -74,6 +75,11 @@ export async function extractInsightsFromBatch(
     viewpoints: c.viewpoints
       .map((v) => {
         const id = indexToId(v.bookmarkIndex, bookmarks);
+        if (!id) {
+          console.warn(
+            `[synthesis:map] Invalid bookmark index ${v.bookmarkIndex} in conflict "${c.topic}" (batch size: ${bookmarks.length})`
+          );
+        }
         return id ? { bookmarkId: id, stance: v.stance } : null;
       })
       .filter((v): v is { bookmarkId: string; stance: string } => v !== null),
@@ -83,13 +89,39 @@ export async function extractInsightsFromBatch(
     type: p.type,
     description: p.description,
     relatedBookmarkIds: p.relatedBookmarkIndices
-      .map((i) => indexToId(i, bookmarks))
+      .map((i) => {
+        const id = indexToId(i, bookmarks);
+        if (!id) {
+          console.warn(
+            `[synthesis:map] Invalid bookmark index ${i} in pattern "${p.description}" (batch size: ${bookmarks.length})`
+          );
+        }
+        return id;
+      })
+      .filter((id): id is string => id !== null),
+  }));
+
+  const extractedThemes = result.extractedThemes.map((t) => ({
+    theme: t.theme,
+    description: t.description,
+    supportingEvidence: t.supportingEvidence,
+    confidence: t.confidence,
+    relatedBookmarkIds: t.relatedBookmarkIndices
+      .map((i) => {
+        const id = indexToId(i, bookmarks);
+        if (!id) {
+          console.warn(
+            `[synthesis:map] Invalid bookmark index ${i} in theme "${t.theme}" (batch size: ${bookmarks.length})`
+          );
+        }
+        return id;
+      })
       .filter((id): id is string => id !== null),
   }));
 
   return {
     bookmarkIds: bookmarks.map((b) => b.id),
-    extractedThemes: result.extractedThemes,
+    extractedThemes,
     conflicts,
     patterns,
   };

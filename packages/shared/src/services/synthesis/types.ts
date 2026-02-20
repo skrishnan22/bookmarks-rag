@@ -45,6 +45,7 @@ export interface BatchExtractionResult {
     description: string;
     supportingEvidence: string[];
     confidence: number;
+    relatedBookmarkIds: string[];
   }>;
   conflicts: Array<{
     topic: string;
