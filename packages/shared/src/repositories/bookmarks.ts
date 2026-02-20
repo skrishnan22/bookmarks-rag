@@ -1,6 +1,11 @@
 import { eq, and, desc, inArray } from "drizzle-orm";
 import type { Database } from "../db/index.js";
-import { bookmarks, type Bookmark, type BookmarkStatus } from "../db/schema.js";
+import {
+  bookmarks,
+  type Bookmark,
+  type BookmarkStatus,
+  type BookmarkInsights,
+} from "../db/schema.js";
 
 export interface CreateBookmarkParams {
   userId: string;
@@ -19,6 +24,7 @@ export interface UpdateBookmarkParams {
   errorMessage?: string;
   entitiesExtracted?: boolean;
   imageCount?: number;
+  insights?: BookmarkInsights;
 }
 
 export class BookmarkRepository {

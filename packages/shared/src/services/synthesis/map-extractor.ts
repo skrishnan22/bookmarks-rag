@@ -7,6 +7,7 @@ import {
   MAP_PHASE_SYSTEM_PROMPT,
 } from "./prompts.js";
 
+// LLM outputs integer indices ([1], [2], ...) — remapped to UUIDs after the call
 const mapExtractionResponseSchema = z.object({
   extractedThemes: z.array(
     z.object({
@@ -21,7 +22,7 @@ const mapExtractionResponseSchema = z.object({
       topic: z.string(),
       viewpoints: z.array(
         z.object({
-          bookmarkId: z.string(),
+          bookmarkIndex: z.number().int().min(1),
           stance: z.string(),
         })
       ),
@@ -31,12 +32,18 @@ const mapExtractionResponseSchema = z.object({
     z.object({
       type: z.enum(["consensus", "disagreement", "unique_perspective"]),
       description: z.string(),
-      relatedBookmarkIds: z.array(z.string()),
+      relatedBookmarkIndices: z.array(z.number().int().min(1)),
     })
   ),
 });
 
-export type MapExtractionResponse = z.infer<typeof mapExtractionResponseSchema>;
+function indexToId(
+  index: number,
+  bookmarks: BatchBookmarkInput[]
+): string | null {
+  const bookmark = bookmarks[index - 1];
+  return bookmark?.id ?? null;
+}
 
 export async function extractInsightsFromBatch(
   bookmarks: BatchBookmarkInput[],
@@ -61,10 +68,29 @@ export async function extractInsightsFromBatch(
     { temperature: 0.3, maxTokens: 4000 }
   );
 
+  // Deterministically remap 1-based indices to real bookmark UUIDs
+  const conflicts = result.conflicts.map((c) => ({
+    topic: c.topic,
+    viewpoints: c.viewpoints
+      .map((v) => {
+        const id = indexToId(v.bookmarkIndex, bookmarks);
+        return id ? { bookmarkId: id, stance: v.stance } : null;
+      })
+      .filter((v): v is { bookmarkId: string; stance: string } => v !== null),
+  }));
+
+  const patterns = result.patterns.map((p) => ({
+    type: p.type,
+    description: p.description,
+    relatedBookmarkIds: p.relatedBookmarkIndices
+      .map((i) => indexToId(i, bookmarks))
+      .filter((id): id is string => id !== null),
+  }));
+
   return {
     bookmarkIds: bookmarks.map((b) => b.id),
     extractedThemes: result.extractedThemes,
-    conflicts: result.conflicts,
-    patterns: result.patterns,
+    conflicts,
+    patterns,
   };
 }

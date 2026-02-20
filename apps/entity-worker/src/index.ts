@@ -48,17 +48,25 @@ async function handleEntityExtraction(
 
   const llmProvider = createLLMProvider("openrouter", env.OPENROUTER_API_KEY);
 
-  const { summary, entities: extracted } = await extractSummaryAndEntities(
+  const {
+    summary,
+    entities: extracted,
+    insights,
+  } = await extractSummaryAndEntities(
     bookmark.markdown,
     bookmark.title ?? "",
     bookmark.url,
     llmProvider
   );
 
-  // Update bookmark with summary (even if no entities found)
-  if (summary) {
-    await bookmarkRepo.update({ id: bookmarkId, summary });
-    console.log(`[extraction] Bookmark ${bookmarkId}: Summary updated`);
+  // Update bookmark with summary and insights (even if no entities found)
+  if (summary || insights.topics.length > 0 || insights.mainClaims.length > 0) {
+    await bookmarkRepo.update({
+      id: bookmarkId,
+      ...(summary && { summary }),
+      insights: { ...insights, extractedAt: new Date().toISOString() },
+    });
+    console.log(`[extraction] Bookmark ${bookmarkId}: Summary and insights updated`);
   }
 
   if (extracted.length === 0) {

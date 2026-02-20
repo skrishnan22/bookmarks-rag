@@ -9,6 +9,8 @@ export const SynthesisSectionSchema = z.object({
     "practical_pattern",
     "pitfall",
     "timeline",
+    "comparison",
+    "mental_model",
   ]),
   title: z.string(),
   content: z.string(),

@@ -136,7 +136,7 @@ export async function extractSummaryAndEntities(
       { role: "user", content: buildUserPrompt(title, markdown, url) },
     ],
     contentExtractionResponseSchema,
-    { temperature: 0.2, maxTokens: 2500 }
+    { temperature: 0.2, maxTokens: 3500 }
   );
 
   const filteredEntities = result.entities.filter(

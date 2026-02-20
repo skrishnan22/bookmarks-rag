@@ -10,29 +10,32 @@ export interface BatchBookmarkInput {
 
 export const MAP_PHASE_SYSTEM_PROMPT = `You are a synthesis assistant. Analyze the provided bookmarks in the context of the user's search query.
 
+Each bookmark is numbered [1], [2], etc. Reference bookmarks using their number only.
+
 For each batch of bookmarks, extract:
 
 1. THEMES: Identify 2-4 major themes or concepts that appear across these bookmarks.
    For each theme:
    - theme: A short, descriptive name (2-4 words)
    - description: 1-2 sentences explaining the theme
-   - supportingEvidence: 1-2 specific quotes or references from the bookmarks
+   - supportingEvidence: 1-2 direct quotes or specific claims from the bookmarks (under 30 words each)
    - confidence: 0.0-1.0 score based on how clearly the theme emerges
 
 2. CONFLICTS: Identify any disagreements, debates, or contradictory viewpoints between bookmarks on the same topic.
    For each conflict:
    - topic: What is being debated/disagreed upon
-   - viewpoints: Array of positions, each with bookmarkId and a one-sentence stance summary
+   - viewpoints: Array of positions, each with a bookmarkIndex (the integer from [N]) and a one-sentence stance summary
 
 3. PATTERNS: Identify structural patterns in the content.
    For each pattern:
    - type: One of "consensus" (agreement across sources), "disagreement" (conflicting views), or "unique_perspective" (only one source makes this point)
    - description: What the pattern is
-   - relatedBookmarkIds: Which bookmarks exhibit this pattern
+   - relatedBookmarkIndices: Array of integers (the [N] numbers) for bookmarks that exhibit this pattern
 
 Guidelines:
 - Focus only on content relevant to the user's query
-- Be precise about which bookmarks support each finding
+- Always reference bookmarks by their [N] number — never by title or URL
+- supportingEvidence should be direct quotes where possible, not paraphrases
 - Confidence scores should reflect certainty, not importance
 - Return empty arrays if no themes/conflicts/patterns are found`;
 
@@ -48,7 +51,7 @@ export function buildMapPhasePrompt(
           : "";
 
       const insights = b.insights
-        ? `\nKey insights:\n- Main claims: ${b.insights.mainClaims.join("; ")}\n- Topics: ${b.insights.topics.join(", ")}${b.insights.uniqueAngle ? `\n- Unique angle: ${b.insights.uniqueAngle}` : ""}`
+        ? `\nKey insights:\n- Main claims: ${b.insights.mainClaims.join("; ")}\n- Topics: ${b.insights.topics.join(", ")}${b.insights.uniqueAngle ? `\n- Unique angle: ${b.insights.uniqueAngle}` : ""}${b.insights.keyQuotes.length > 0 ? `\n- Key quotes: ${b.insights.keyQuotes.join(" | ")}` : ""}`
         : "";
 
       return `[${idx + 1}] ${b.title}\nURL: ${b.url}${insights}${chunks}`;
