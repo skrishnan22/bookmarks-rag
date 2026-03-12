@@ -57,7 +57,7 @@ export class SearchRepository {
         WHERE b.user_id = ${userId}
           AND c.embedding IS NOT NULL
         ORDER BY c.embedding <=> ${embeddingStr}::vector
-        LIMIT 20
+        LIMIT ${limit}
       ),
       bm25_results AS (
         SELECT
@@ -72,7 +72,7 @@ export class SearchRepository {
         JOIN bookmarks b ON c.bookmark_id = b.id
         WHERE b.user_id = ${userId}
           AND c.content_tsv @@ plainto_tsquery('english', ${queryText})
-        LIMIT 20
+        LIMIT ${limit}
       ),
       combined AS (
         SELECT

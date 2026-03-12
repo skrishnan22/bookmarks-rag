@@ -17,6 +17,7 @@ export interface SearchOptions {
 }
 
 export interface SearchResultItem {
+  chunkId: string;
   bookmarkId: string;
   bookmarkTitle: string | null;
   bookmarkUrl: string;
@@ -169,6 +170,7 @@ async function enrichWithBookmarkMetadata(
   return results.map((r) => {
     const bookmark = bookmarksMap.get(r.bookmarkId);
     return {
+      chunkId: r.chunkId,
       bookmarkId: r.bookmarkId,
       bookmarkTitle: bookmark?.title ?? null,
       bookmarkUrl: bookmark?.url ?? "",

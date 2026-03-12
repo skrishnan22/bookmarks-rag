@@ -199,25 +199,37 @@ const stepExecutors: Record<StepName, (ctx: PipelineContext) => Promise<void>> =
           imageCount: insertedImages.length,
         });
 
-        // Queue one message per image for entity extraction (Phase 2)
-        // Only queue images with score > 0 (skip decorative images)
-        const imagesToQueue = insertedImages.filter(
-          (img) => (img.heuristicScore ?? 0) > 0
-        );
+        // Queue image entity extraction only for tweets (x.com/twitter.com)
+        const bookmarkDomain = extractDomain(ctx.url);
+        const isTweet =
+          bookmarkDomain === "x.com" ||
+          bookmarkDomain === "twitter.com" ||
+          bookmarkDomain === "www.x.com" ||
+          bookmarkDomain === "www.twitter.com";
 
-        for (const image of imagesToQueue) {
-          console.log("messag for image", image.url);
-          await ctx.env.ENTITY_QUEUE.send({
-            type: "image-entity-extraction",
-            imageId: image.id,
-            bookmarkId: ctx.bookmarkId,
-            userId: ctx.userId,
-          });
+        if (isTweet) {
+          const imagesToQueue = insertedImages.filter(
+            (img) => (img.heuristicScore ?? 0) > 0
+          );
+
+          for (const image of imagesToQueue) {
+            console.log("messag for image", image.url);
+            await ctx.env.ENTITY_QUEUE.send({
+              type: "image-entity-extraction",
+              imageId: image.id,
+              bookmarkId: ctx.bookmarkId,
+              userId: ctx.userId,
+            });
+          }
+
+          console.log(
+            `Bookmark ${ctx.bookmarkId}: Extracted ${insertedImages.length} images, queued ${imagesToQueue.length} for processing`
+          );
+        } else {
+          console.log(
+            `Bookmark ${ctx.bookmarkId}: Extracted ${insertedImages.length} images, skipping entity extraction (not a tweet)`
+          );
         }
-
-        console.log(
-          `Bookmark ${ctx.bookmarkId}: Extracted ${insertedImages.length} images, queued ${imagesToQueue.length} for processing`
-        );
       }
 
       const shouldEnqueueEntities = !ctx.entitiesExtracted;
