@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import appCss from "../styles/globals.css?url";
+import excalidrawCss from "@excalidraw/excalidraw/index.css?url";
 import {
   Outlet,
   createRootRoute,
@@ -37,7 +38,10 @@ export const Route = createRootRoute({
         title: "Wefts",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: excalidrawCss },
+    ],
   }),
   component: RootComponent,
 });

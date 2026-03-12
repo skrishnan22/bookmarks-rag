@@ -8,19 +8,19 @@ export interface BatchBookmarkInput {
   matchedChunks: string[];
 }
 
-export const MAP_PHASE_SYSTEM_PROMPT = `You are a synthesis assistant. Analyze the provided bookmarks in the context of the user's search query.
+export const MAP_PHASE_SYSTEM_PROMPT = `You are a synthesis assistant. Analyze the provided bookmarks in the context of the user's query and extract high-signal evidence for teaching-quality synthesis.
 
 Each bookmark is numbered [1], [2], etc. Reference bookmarks using their number only.
 
 For each batch of bookmarks, extract:
 
-1. THEMES: Identify 2-4 major themes or concepts that appear across these bookmarks.
+1. THEMES: Identify 3-5 major themes or concepts that appear across these bookmarks.
    For each theme:
-   - theme: A short, descriptive name (2-4 words)
-   - description: 1-2 sentences explaining the theme
-   - supportingEvidence: 1-2 direct quotes or specific claims, each prefixed with the bookmark number, e.g. "[2] LLMs work best with structured prompts"
-   - confidence: 0.0-1.0 score based on how clearly the theme emerges
-   - relatedBookmarkIndices: Array of integers (the [N] numbers) for bookmarks that contribute to this theme
+    - theme: A short, descriptive name (2-4 words)
+    - description: 2-3 sentences explaining the theme in concrete terms
+    - supportingEvidence: 2-3 direct quotes or specific claims, each prefixed with the bookmark number, e.g. "[2] LLMs work best with structured prompts"
+    - confidence: 0.0-1.0 score based on how clearly the theme emerges
+    - relatedBookmarkIndices: Array of integers (the [N] numbers) for bookmarks that contribute to this theme
 
 2. CONFLICTS: Identify any disagreements, debates, or contradictory viewpoints between bookmarks on the same topic.
    For each conflict:
@@ -30,14 +30,15 @@ For each batch of bookmarks, extract:
 3. PATTERNS: Identify structural patterns in the content.
    For each pattern:
    - type: One of "consensus" (agreement across sources), "disagreement" (conflicting views), or "unique_perspective" (only one source makes this point)
-   - description: What the pattern is
-   - relatedBookmarkIndices: Array of integers (the [N] numbers) for bookmarks that exhibit this pattern
+    - description: What the pattern is and why it matters for someone applying this knowledge
+    - relatedBookmarkIndices: Array of integers (the [N] numbers) for bookmarks that exhibit this pattern
 
 Guidelines:
 - Focus only on content relevant to the user's query
 - Always reference bookmarks by their [N] number — never by title or URL
 - supportingEvidence should be direct quotes where possible, prefixed with [N], not paraphrases
 - Confidence scores should reflect certainty, not importance
+- Prioritize specific and practical evidence over generic observations
 - Return empty arrays if no themes/conflicts/patterns are found`;
 
 export function buildMapPhasePrompt(
@@ -48,7 +49,7 @@ export function buildMapPhasePrompt(
     .map((b, idx) => {
       const chunks =
         b.matchedChunks.length > 0
-          ? `\nMatched content:\n${b.matchedChunks.slice(0, 2).join("\n---\n")}`
+          ? `\nMatched content:\n${b.matchedChunks.slice(0, 3).join("\n---\n")}`
           : "";
 
       const insights = b.insights

@@ -17,7 +17,9 @@ import { searchRouter } from "./routes/search.js";
 import { topicsRouter } from "./routes/topics.js";
 import { entitiesRouter } from "./routes/entities.js";
 import { authRouter } from "./routes/auth.js";
+import { synthesisRouter } from "./routes/synthesis.js";
 import { requireAuth } from "./middleware/auth.js";
+export { SynthesisWorkflow } from "./workflows/synthesis.js";
 
 const app = new Hono<AppContext>();
 
@@ -61,6 +63,8 @@ app.get("/api/v1", (c) => {
       "POST /api/v1/topics/recluster",
       "GET /api/v1/entities",
       "GET /api/v1/entities/:id",
+      "POST /api/v1/synthesis",
+      "GET /api/v1/synthesis/:runId",
     ],
   });
 });
@@ -78,6 +82,9 @@ app.route("/api/v1/topics", topicsRouter);
 app.use("/api/v1/entities/*", requireAuth);
 app.use("/api/v1/entities", requireAuth);
 app.route("/api/v1/entities", entitiesRouter);
+app.use("/api/v1/synthesis/*", requireAuth);
+app.use("/api/v1/synthesis", requireAuth);
+app.route("/api/v1/synthesis", synthesisRouter);
 
 function resolveCorsOrigin(
   origin: string | undefined,
@@ -85,6 +92,11 @@ function resolveCorsOrigin(
 ): string | undefined {
   if (!origin) {
     return undefined;
+  }
+
+  // Allow Chrome extension origins
+  if (origin.startsWith("chrome-extension://")) {
+    return origin;
   }
 
   const allowedOrigins = new Set([

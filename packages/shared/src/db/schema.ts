@@ -86,6 +86,91 @@ export const bookmarks = pgTable(
   ]
 );
 
+export const synthesisRunStatusEnum = [
+  "queued",
+  "running",
+  "complete",
+  "failed",
+] as const;
+
+export type SynthesisRunStatus = (typeof synthesisRunStatusEnum)[number];
+
+export const synthesisRunPhaseEnum = [
+  "queued",
+  "retrieval",
+  "map",
+  "reduce",
+  "excalidraw",
+  "render",
+  "visuals",
+  "complete",
+  "failed",
+] as const;
+
+export type SynthesisRunPhase = (typeof synthesisRunPhaseEnum)[number];
+
+export interface SynthesisRunResult {
+  synthesis: Record<string, unknown>;
+  excalidraw: Record<string, unknown>;
+}
+
+// V2 synthesis result with component-based rendering
+export interface SynthesisRunResultV2 {
+  version: 2;
+  query: string;
+  theme: "default" | "warm" | "cool" | "mono" | "vibrant";
+  components: Record<string, unknown>[];
+  citationIndex: Array<{
+    index: number;
+    bookmarkId: string;
+    title: string;
+    url: string;
+  }>;
+  metadata: {
+    bookmarkCount: number;
+    componentCount: number;
+    generatedAt: string;
+  };
+}
+
+export const synthesisRuns = pgTable(
+  "synthesis_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    query: text("query").notNull(),
+    status: text("status")
+      .$type<SynthesisRunStatus>()
+      .default("queued")
+      .notNull(),
+    phase: text("phase").$type<SynthesisRunPhase>().default("queued").notNull(),
+    progress: integer("progress").default(0).notNull(),
+    result: jsonb("result").$type<SynthesisRunResult>(),
+    // V2: Streaming components stored incrementally
+    components: jsonb("components").$type<Record<string, unknown>[]>(),
+    // V2: Current render index for streaming
+    renderIndex: integer("render_index").default(0).notNull(),
+    // V2: Result version (1 = excalidraw, 2 = components)
+    resultVersion: integer("result_version").default(1).notNull(),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("synthesis_runs_user_id_idx").on(table.userId),
+    index("synthesis_runs_status_idx").on(table.status),
+    index("synthesis_runs_user_created_at_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+  ]
+);
+
 export const chunks = pgTable(
   "chunks",
   {
@@ -167,6 +252,9 @@ export type NewUser = typeof users.$inferInsert;
 
 export type Bookmark = typeof bookmarks.$inferSelect;
 export type NewBookmark = typeof bookmarks.$inferInsert;
+
+export type SynthesisRun = typeof synthesisRuns.$inferSelect;
+export type NewSynthesisRun = typeof synthesisRuns.$inferInsert;
 
 export type Chunk = typeof chunks.$inferSelect;
 export type NewChunk = typeof chunks.$inferInsert;

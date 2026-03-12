@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SynthesisRouteImport } from './routes/synthesis'
 import { Route as EntitiesRouteImport } from './routes/entities'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EntitiesTvShowsRouteImport } from './routes/entities/tv-shows'
 import { Route as EntitiesMoviesRouteImport } from './routes/entities/movies'
 import { Route as EntitiesBooksRouteImport } from './routes/entities/books'
 
+const SynthesisRoute = SynthesisRouteImport.update({
+  id: '/synthesis',
+  path: '/synthesis',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EntitiesRoute = EntitiesRouteImport.update({
   id: '/entities',
   path: '/entities',
@@ -44,6 +50,7 @@ const EntitiesBooksRoute = EntitiesBooksRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/entities': typeof EntitiesRouteWithChildren
+  '/synthesis': typeof SynthesisRoute
   '/entities/books': typeof EntitiesBooksRoute
   '/entities/movies': typeof EntitiesMoviesRoute
   '/entities/tv-shows': typeof EntitiesTvShowsRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/entities': typeof EntitiesRouteWithChildren
+  '/synthesis': typeof SynthesisRoute
   '/entities/books': typeof EntitiesBooksRoute
   '/entities/movies': typeof EntitiesMoviesRoute
   '/entities/tv-shows': typeof EntitiesTvShowsRoute
@@ -59,6 +67,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/entities': typeof EntitiesRouteWithChildren
+  '/synthesis': typeof SynthesisRoute
   '/entities/books': typeof EntitiesBooksRoute
   '/entities/movies': typeof EntitiesMoviesRoute
   '/entities/tv-shows': typeof EntitiesTvShowsRoute
@@ -68,6 +77,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/entities'
+    | '/synthesis'
     | '/entities/books'
     | '/entities/movies'
     | '/entities/tv-shows'
@@ -75,6 +85,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/entities'
+    | '/synthesis'
     | '/entities/books'
     | '/entities/movies'
     | '/entities/tv-shows'
@@ -82,6 +93,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/entities'
+    | '/synthesis'
     | '/entities/books'
     | '/entities/movies'
     | '/entities/tv-shows'
@@ -90,10 +102,18 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EntitiesRoute: typeof EntitiesRouteWithChildren
+  SynthesisRoute: typeof SynthesisRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/synthesis': {
+      id: '/synthesis'
+      path: '/synthesis'
+      fullPath: '/synthesis'
+      preLoaderRoute: typeof SynthesisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/entities': {
       id: '/entities'
       path: '/entities'
@@ -151,6 +171,7 @@ const EntitiesRouteWithChildren = EntitiesRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EntitiesRoute: EntitiesRouteWithChildren,
+  SynthesisRoute: SynthesisRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

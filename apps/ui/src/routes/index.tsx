@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { BookmarkListItem } from "~/components/bookmarks/BookmarkListItem";
@@ -12,7 +12,7 @@ import {
   flattenBookmarks,
   useCreateBookmark,
 } from "~/hooks/useBookmarks";
-import { Link2, Plus } from "lucide-react";
+import { Link2, Plus, Sparkles } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/")({
 function Home() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -153,6 +154,28 @@ function Home() {
               placeholder="Search through your collection..."
               loading={isSearching}
             />
+
+            {isSearchMode && searchResults && searchResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="flex justify-center"
+              >
+                <button
+                  onClick={() =>
+                    navigate({
+                      to: "/synthesis",
+                      search: { q: debouncedQuery },
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1.5 text-xs font-semibold text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Synthesize
+                </button>
+              </motion.div>
+            )}
 
             {/* Add Bookmark Input */}
             <motion.form

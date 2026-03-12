@@ -410,3 +410,173 @@ export async function skipImage(
   );
   return response.json();
 }
+
+// Synthesis types
+export type SectionType =
+  | "core_concept"
+  | "consensus"
+  | "debate"
+  | "practical_pattern"
+  | "pitfall"
+  | "timeline"
+  | "comparison"
+  | "mental_model";
+
+export interface SynthesisSection {
+  id: string;
+  type: SectionType;
+  title: string;
+  content: string;
+  sourceBookmarkIds: string[];
+}
+
+export interface DeepDive {
+  bookmarkId: string;
+  title: string;
+  url: string;
+  reason: string;
+}
+
+export interface SynthesisCitationReference {
+  index: number;
+  bookmarkId: string;
+  title: string;
+  url: string;
+}
+
+export type NotebookBlockType =
+  | "key_insight"
+  | "practical_takeaway"
+  | "tradeoff"
+  | "mental_model"
+  | "open_question";
+
+export interface SynthesisNotebookBlock {
+  id: string;
+  type: NotebookBlockType;
+  title: string;
+  insight: string;
+  whyItMatters: string;
+  howToApply: string;
+  sourceBookmarkIds: string[];
+  citations: Array<{
+    bookmarkId: string;
+    chunkId: string;
+    title: string;
+    url: string;
+    snippet: string;
+  }>;
+}
+
+export interface SynthesisResult {
+  query: string;
+  narrativeMarkdown: string;
+  citationIndex: SynthesisCitationReference[];
+  notebookBlocks: SynthesisNotebookBlock[];
+  sections: SynthesisSection[];
+  deepDives: DeepDive[];
+  trust: {
+    citationCoverage: number;
+    citedBlocks: number;
+    uncitedBlocks: number;
+    totalCitations: number;
+    sourceDiversity: number;
+  };
+  metadata: {
+    bookmarkCount: number;
+    generatedAt: string;
+  };
+}
+
+export type SynthesisRunStatus = "queued" | "running" | "complete" | "failed";
+
+export type SynthesisRunPhase =
+  | "queued"
+  | "retrieval"
+  | "map"
+  | "reduce"
+  | "excalidraw"
+  | "render"
+  | "visuals"
+  | "complete"
+  | "failed";
+
+export interface SynthesisRunError {
+  code: string;
+  message: string;
+}
+
+export interface CreateSynthesisRunResponse {
+  success: boolean;
+  data?: {
+    runId: string;
+    status: SynthesisRunStatus;
+    phase: SynthesisRunPhase;
+    progress: number;
+    version: number;
+    pollAfterMs: number;
+    streamUrl?: string;
+    createdAt: string;
+  };
+  error?: SynthesisRunError;
+}
+
+export interface SynthesisRunResponse {
+  success: boolean;
+  data?: {
+    runId: string;
+    query: string;
+    status: SynthesisRunStatus;
+    phase: SynthesisRunPhase;
+    progress: number;
+    version: number;
+    createdAt: string | null;
+    startedAt: string | null;
+    updatedAt: string | null;
+    completedAt?: string | null;
+    pollAfterMs?: number;
+    streamUrl?: string;
+    error?: SynthesisRunError;
+    // V1 result
+    result?: {
+      synthesis: SynthesisResult;
+      excalidraw: Record<string, unknown>;
+    };
+    // V2 components
+    components?: Record<string, unknown>[];
+    renderIndex?: number;
+  };
+  error?: SynthesisRunError;
+}
+
+export async function createSynthesisRun(
+  query: string,
+  version: number = 2
+): Promise<CreateSynthesisRunResponse> {
+  const response = await apiFetch("/api/v1/synthesis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, version }),
+  });
+
+  if (response.status !== 202) {
+    throw new Error(
+      `Create synthesis run failed with status ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+export async function getSynthesisRun(
+  runId: string
+): Promise<SynthesisRunResponse> {
+  const response = await apiFetch(`/api/v1/synthesis/${runId}`);
+  if (!response.ok) {
+    throw new Error(
+      `Fetch synthesis run failed with status ${response.status}`
+    );
+  }
+
+  return response.json();
+}

@@ -31,3 +31,96 @@ export {
 } from "./image-entity-extraction.js";
 
 export { mergeImageEntities } from "./entity-merge.js";
+
+// Synthesis pipeline
+export { runSynthesisPipeline } from "./synthesis/orchestrator.js";
+export type {
+  SynthesisResult,
+  SynthesisSection,
+  SynthesisCitation,
+  DeepDive,
+  BatchExtractionResult,
+} from "./synthesis/types.js";
+export { extractInsightsFromBatch } from "./synthesis/map-extractor.js";
+export { synthesizeFromExtractions } from "./synthesis/reducer.js";
+
+// Excalidraw generator
+export {
+  generateExcalidrawJson,
+  type ExcalidrawFile,
+} from "./excalidraw/generator.js";
+
+// Synthesis V2 - Component-based rendering
+export {
+  ComponentSpecSchema,
+  SynthesisV2ResultSchema,
+  validateComponent,
+  validateComponents,
+  type ComponentSpec,
+  type ComponentType,
+  type SynthesisV2Result,
+  type SynthesisContainer,
+  type Section,
+  type TwoColumn,
+  type Divider,
+  type SectionHeader,
+  type TopicTitle,
+  type InsightCard,
+  type InsightCardVariant,
+  type ConceptCard,
+  type SourceCard,
+  type QuestionCallout,
+  type WarningCallout,
+  type TipCallout,
+  type KeyTakeaway,
+  type ComparisonGrid,
+  type VsBlock,
+  type ProcessFlow,
+  type ProcessStep,
+  type Timeline,
+  type TimelineEvent,
+  type SourceChip,
+  type SourceCluster,
+  type DeepDiveLink,
+  type VisualPlaceholder,
+  type NarrativeBlock,
+  type BulletList,
+  type QuoteBlock,
+  type SourceReference,
+  type HeroBlock,
+  type DebateBlock,
+  type StatCallout,
+  type ReadingPath,
+  type ComponentWeight,
+} from "./synthesis/component-schemas.js";
+
+export {
+  ThemeNameSchema,
+  getTheme,
+  getThemeColors,
+  themeToCssVars,
+  themes,
+  type ThemeName,
+  type Theme,
+  type ThemeColors,
+} from "./synthesis/theme.js";
+
+export {
+  runRenderPhase,
+  buildSynthesisV2Result,
+  generateFallbackComponents,
+  type RenderPhaseOptions,
+  type RenderPhaseResult,
+} from "./synthesis/render-orchestrator.js";
+
+export {
+  StreamingComponentParser,
+  parseComponentArray,
+  extractJsonArray,
+} from "./synthesis/streaming-parser.js";
+
+export {
+  buildRenderSystemPrompt,
+  buildRenderUserPrompt,
+  buildSimpleRenderPrompt,
+} from "./synthesis/render-prompt.js";

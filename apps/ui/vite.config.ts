@@ -13,5 +13,14 @@ export default defineConfig({
       },
     },
   },
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
+  optimizeDeps: {
+    include: ["@excalidraw/excalidraw"],
+  },
+  define: {
+    "process.env.IS_PREACT": JSON.stringify("false"),
+  },
   plugins: [tsConfigPaths(), tanstackStart(), viteReact()],
 });

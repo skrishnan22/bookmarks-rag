@@ -14,6 +14,9 @@ export interface Env {
   AUTH_COOKIE_DOMAIN?: string;
   WEB_ORIGIN?: string;
 
+  // Workflow bindings
+  SYNTHESIS_WORKFLOW: Workflow;
+
   // Queue bindings (producer only)
   INGESTION_QUEUE: Queue<BookmarkIngestionMessage>;
   ENTITY_QUEUE: Queue<EntityQueueMessage>;

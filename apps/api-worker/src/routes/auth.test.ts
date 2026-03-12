@@ -186,11 +186,14 @@ function createTestEnv(): Env {
     JINA_API_KEY: "test-jina",
     GOOGLE_CLIENT_ID: "test-google-client-id",
     GOOGLE_CLIENT_SECRET: "test-google-client-secret",
+    JWT_SECRET: "test-jwt-secret",
     TMDB_API_KEY: "test-tmdb",
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_ANON_KEY: "anon-key",
     WEB_ORIGIN: "http://localhost:3000",
+    SYNTHESIS_WORKFLOW: {} as Env["SYNTHESIS_WORKFLOW"],
     INGESTION_QUEUE: {} as Env["INGESTION_QUEUE"],
+    ENTITY_QUEUE: {} as Env["ENTITY_QUEUE"],
   };
 }
 
