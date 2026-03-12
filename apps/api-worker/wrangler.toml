@@ -1,6 +1,6 @@
 name = "rag-bookmarks-api"
 main = "src/index.ts"
-compatibility_date = "2024-03-01"
+compatibility_date = "2024-10-22"
 compatibility_flags = ["nodejs_compat"]
 
 [dev]
@@ -9,6 +9,11 @@ inspector_port = 9229
 
 [vars]
 ENVIRONMENT = "development"
+
+[[workflows]]
+name = "rag-bookmarks-synthesis"
+binding = "SYNTHESIS_WORKFLOW"
+class_name = "SynthesisWorkflow"
 
 # Queue producers only - consumers are in separate workers
 [[queues.producers]]
